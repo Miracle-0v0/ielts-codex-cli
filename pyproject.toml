@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ielts-codex"
+version = "0.2.0"
+description = "A Codex-inspired, zero-dependency IELTS vocabulary trainer for the terminal."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "IELTS Codex contributors" }]
+keywords = ["ielts", "vocabulary", "cli", "spaced-repetition"]
+classifiers = [
+  "Environment :: Console",
+  "Intended Audience :: Education",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Education",
+]
+
+[project.urls]
+Homepage = "https://github.com/Miracle-0v0/ielts-codex-cli"
+Repository = "https://github.com/Miracle-0v0/ielts-codex-cli.git"
+Issues = "https://github.com/Miracle-0v0/ielts-codex-cli/issues"
+
+[project.scripts]
+ielts-codex = "ielts_codex.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"ielts_codex.data" = ["words.json"]
