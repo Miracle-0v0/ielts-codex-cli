@@ -426,7 +426,10 @@ class TerminalUI:
         import tty
 
         previous = termios.tcgetattr(input_fd)
-        tty.setraw(input_fd, when=termios.TCSANOW)
+        # cbreak gives us immediate keys while preserving terminal output
+        # processing. Raw mode disables newline-to-carriage-return conversion
+        # on many terminals, which makes menu rows drift diagonally.
+        tty.setcbreak(input_fd, when=termios.TCSANOW)
         restored = False
 
         def restore_posix() -> None:
