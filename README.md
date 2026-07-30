@@ -32,7 +32,7 @@ user-approved sync can refresh English definitions from Open English WordNet
 - Daily goals, streaks, accuracy, and mastery statistics
 - English, Chinese, and synonym search
 - Optional Open English WordNet 2025 English-definition sync
-- Experimental storm-survival spelling game with fog, hunger, and a companion
+- Experimental pixel-art spelling game with complete animated characters
 - Optional image-inspired pet creation through a bring-your-own-key vision API
 - Zero runtime dependencies
 
@@ -113,18 +113,25 @@ The quiz shows a Chinese meaning and asks for the English spelling. A correct
 answer advances the card. A misspelling reveals the answer and schedules the
 card as `Again`. Use `h` for a hint, `s` to skip, or `q` to stop.
 
-## Experimental game mode
+## Experimental pixel game mode
 
-Version 0.4.0 introduces a terminal survival expedition:
+Version 0.4.1 rebuilds the survival expedition as a terminal pixel game:
 
 ```text
 › /game
 › /game 3 environment
 ```
 
+On an interactive terminal, an 11-by-5-tile camera shows complete 7-by-6
+logical-pixel sprites instead of single-character map markers. The player has a
+full body, the built-in puppy has a head, body, legs, and tail, and every letter
+appears inside a complete animated monster. The renderer packs two vertical
+pixels into each terminal cell, allowing the pixel scene and HUD to fit an
+80-by-24 terminal.
+
 Move with `WASD` or the arrow keys and walk into letter monsters in the exact
-spelling order. A wrong monster costs hunger. Rain moves across the visible
-ground, unexplored cells stay under fog, and taking too long progresses through
+spelling order. A wrong monster costs hunger. Animated rain crosses the visible
+scene, fog hides unexplored tiles, and taking too long progresses through
 hunger, dizziness, and health loss. Your pet follows behind and extends the
 visible area.
 
@@ -142,16 +149,19 @@ updates the same spaced-repetition card used by `/learn`, `/review`, and
 direction caps the result at `Hard`, while directly revealing the next letter
 records `Again`.
 
-Interactive terminals use a smooth alternate-screen animation. Redirected
-input, `TERM=dumb`, and terminals that are too small automatically use a
-turn-based interface so slow input is not punished by wall-clock time.
+Interactive terminals use a smooth alternate-screen animation that redraws
+in place. Non-TTY input and `TERM=dumb` use an explicit text-only, turn-based
+fallback so redirected or assistive input is not punished by wall-clock time.
+A pixel session requires at least 80 columns and 24 rows.
 
 ### Create a pet from an image
 
-The game includes a small offline puppy that follows the player and opens the
-fog by default. Creating a custom pet is optional and replaces that puppy's
-profile using your own vision-model account and API key. Configure a provider
-before launching IELTS Codex:
+The game includes a complete, animated offline puppy that follows the player
+and opens the fog by default. Creating a custom pet is optional and replaces
+that puppy's appearance using your own vision-model account and API key. The
+API returns a strictly validated three-colour 7-by-6 indexed pixel sprite; it
+cannot return terminal escape sequences or executable drawing instructions.
+Configure a provider before launching IELTS Codex:
 
 ```bash
 export IELTS_CODEX_GAME_PROVIDER=kimi

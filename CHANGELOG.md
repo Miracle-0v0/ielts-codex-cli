@@ -2,7 +2,19 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## [0.4.0] - Unreleased
+## [0.4.1] - Unreleased
+
+### Changed
+
+- Rebuilt `/game` as a terminal-native pixel-art viewport with full player,
+  companion, and letter-monster sprites instead of single-character markers.
+- Added animated sprite frames, camera tracking, and layered pixel rain and fog.
+- Extended image-inspired companion creation with a strictly validated pixel
+  palette and sprite.
+- Added automatic migration for local 0.4.0 companion saves and retained the
+  text-only turn-based fallback for non-interactive terminals.
+
+## [0.4.0] - 2026-07-30
 
 Experimental gameplay release focused on making spelling practice more playful.
 

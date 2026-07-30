@@ -26,6 +26,8 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Callable, Mapping
 
+from . import __version__
+
 
 DEFAULT_TIMEOUT_SECONDS = 30.0
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
@@ -41,11 +43,26 @@ _ALLOWED_PROFILE_FIELDS = {
     "vision_bonus",
     "catchphrase",
     "portrait",
+    "palette",
+    "sprite",
 }
 _PET_GLYPHS = frozenset("&*;:mpcd")
+_PALETTE_COLOR_RE = re.compile(r"\A#[0-9A-Fa-f]{6}\Z")
+_SPRITE_PIXELS = frozenset(".123")
+_SPRITE_WIDTH = 7
+_SPRITE_HEIGHT = 6
 _JSON_FENCE_RE = re.compile(
     r"\A\s*```(?:json)?[ \t]*\r?\n(?P<body>.*?)\r?\n?```\s*\Z",
     re.IGNORECASE | re.DOTALL,
+)
+DEFAULT_PET_PALETTE = ("#493126", "#C9834D", "#FFE0A3")
+DEFAULT_PET_SPRITE = (
+    "11...11",
+    "1221221",
+    "1222221",
+    "1232321",
+    ".122211",
+    ".1.1.1.",
 )
 _PORTRAIT_ALLOWED = frozenset(
     " !\"#$%&'()*+,-./0123456789:;<=>?@"
@@ -312,6 +329,31 @@ class PetProfile:
     vision_bonus: int
     catchphrase: str
     portrait: tuple[str, ...]
+    palette: tuple[str, str, str] = DEFAULT_PET_PALETTE
+    sprite: tuple[str, ...] = DEFAULT_PET_SPRITE
+
+    def __post_init__(self) -> None:
+        """Validate direct construction as strictly as decoded API profiles."""
+
+        name = _bounded_label(self.name, "name", 1, 20)
+        species = _bounded_label(self.species, "species", 1, 32)
+        glyph = _validate_glyph(self.glyph)
+        personality = _bounded_text(self.personality, "personality", 1, 96)
+        catchphrase = _bounded_text(self.catchphrase, "catchphrase", 1, 96)
+        vision_bonus = _validate_vision_bonus(self.vision_bonus)
+        portrait = _validate_portrait(self.portrait, json_array=False)
+        palette = _validate_palette(self.palette, json_array=False)
+        sprite = _validate_sprite(self.sprite, json_array=False)
+
+        object.__setattr__(self, "name", name)
+        object.__setattr__(self, "species", species)
+        object.__setattr__(self, "glyph", glyph)
+        object.__setattr__(self, "personality", personality)
+        object.__setattr__(self, "catchphrase", catchphrase)
+        object.__setattr__(self, "vision_bonus", vision_bonus)
+        object.__setattr__(self, "portrait", portrait)
+        object.__setattr__(self, "palette", palette)
+        object.__setattr__(self, "sprite", sprite)
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any]) -> "PetProfile":
@@ -328,45 +370,20 @@ class PetProfile:
                 details.append("unexpected " + ", ".join(sorted(extra)))
             raise PetResponseError("Invalid pet profile fields: " + "; ".join(details))
 
-        name = _bounded_label(value["name"], "name", 1, 20)
-        species = _bounded_label(value["species"], "species", 1, 32)
-        glyph = _validate_glyph(value["glyph"])
-        personality = _bounded_text(value["personality"], "personality", 1, 96)
-        catchphrase = _bounded_text(value["catchphrase"], "catchphrase", 1, 96)
-
-        vision_bonus = value["vision_bonus"]
-        if isinstance(vision_bonus, bool) or not isinstance(vision_bonus, int):
-            raise PetResponseError("Pet vision_bonus must be an integer.")
-        if not 1 <= vision_bonus <= 3:
-            raise PetResponseError("Pet vision_bonus must be between 1 and 3.")
-
-        portrait_value = value["portrait"]
-        if not isinstance(portrait_value, list) or not 1 <= len(portrait_value) <= 7:
-            raise PetResponseError("Pet portrait must contain 1-7 ASCII-art lines.")
-        portrait: list[str] = []
-        for index, raw_line in enumerate(portrait_value, start=1):
-            if not isinstance(raw_line, str):
-                raise PetResponseError(f"Pet portrait line {index} must be text.")
-            line = raw_line.rstrip()
-            if (
-                not line
-                or len(line) > 24
-                or any(char not in _PORTRAIT_ALLOWED for char in line)
-            ):
-                raise PetResponseError(
-                    f"Pet portrait line {index} must be 1-24 printable ASCII "
-                    "characters."
-                )
-            portrait.append(line)
+        portrait = _validate_portrait(value["portrait"], json_array=True)
+        palette = _validate_palette(value["palette"], json_array=True)
+        sprite = _validate_sprite(value["sprite"], json_array=True)
 
         return cls(
-            name=name,
-            species=species,
-            glyph=glyph,
-            personality=personality,
-            vision_bonus=vision_bonus,
-            catchphrase=catchphrase,
-            portrait=tuple(portrait),
+            name=value["name"],
+            species=value["species"],
+            glyph=value["glyph"],
+            personality=value["personality"],
+            vision_bonus=value["vision_bonus"],
+            catchphrase=value["catchphrase"],
+            portrait=portrait,
+            palette=palette,
+            sprite=sprite,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -380,6 +397,8 @@ class PetProfile:
             "vision_bonus": self.vision_bonus,
             "catchphrase": self.catchphrase,
             "portrait": list(self.portrait),
+            "palette": list(self.palette),
+            "sprite": list(self.sprite),
         }
 
 
@@ -496,7 +515,9 @@ class PetAPIClient:
                             "type": "text",
                             "text": (
                                 "Create one friendly terminal-game companion "
-                                "inspired by this image. Return JSON only."
+                                "by abstracting colors and non-identifying visual "
+                                "motifs from this image. Never identify or recreate "
+                                "a person. Return JSON only."
                             ),
                         },
                         {
@@ -520,7 +541,7 @@ class PetAPIClient:
                 "Accept": "application/json",
                 "Authorization": f"Bearer {self.config.api_key}",
                 "Content-Type": "application/json",
-                "User-Agent": "ielts-codex-pet/0.4",
+                "User-Agent": f"ielts-codex-pet/{__version__}",
             },
         )
 
@@ -741,6 +762,80 @@ def _validate_glyph(value: Any) -> str:
     return glyph
 
 
+def _validate_vision_bonus(value: Any) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise PetResponseError("Pet vision_bonus must be an integer.")
+    if not 1 <= value <= 3:
+        raise PetResponseError("Pet vision_bonus must be between 1 and 3.")
+    return value
+
+
+def _validate_portrait(value: Any, *, json_array: bool) -> tuple[str, ...]:
+    expected_type = list if json_array else tuple
+    if not isinstance(value, expected_type) or not 1 <= len(value) <= 7:
+        raise PetResponseError("Pet portrait must contain 1-7 ASCII-art lines.")
+    portrait: list[str] = []
+    for index, raw_line in enumerate(value, start=1):
+        if not isinstance(raw_line, str):
+            raise PetResponseError(f"Pet portrait line {index} must be text.")
+        line = raw_line.rstrip()
+        if (
+            not line
+            or len(line) > 24
+            or any(char not in _PORTRAIT_ALLOWED for char in line)
+        ):
+            raise PetResponseError(
+                f"Pet portrait line {index} must be 1-24 printable ASCII "
+                "characters."
+            )
+        portrait.append(line)
+    return tuple(portrait)
+
+
+def _validate_palette(
+    value: Any,
+    *,
+    json_array: bool,
+) -> tuple[str, str, str]:
+    expected_type = list if json_array else tuple
+    if not isinstance(value, expected_type) or len(value) != 3:
+        raise PetResponseError("Pet palette must contain exactly 3 colors.")
+    colors: list[str] = []
+    for index, color in enumerate(value, start=1):
+        if not isinstance(color, str) or _PALETTE_COLOR_RE.fullmatch(color) is None:
+            raise PetResponseError(
+                f"Pet palette color {index} must use strict #RRGGBB hex format."
+            )
+        colors.append(color.upper())
+    if len(set(colors)) != 3:
+        raise PetResponseError("Pet palette colors must be distinct.")
+    return colors[0], colors[1], colors[2]
+
+
+def _validate_sprite(value: Any, *, json_array: bool) -> tuple[str, ...]:
+    expected_type = list if json_array else tuple
+    if not isinstance(value, expected_type) or len(value) != _SPRITE_HEIGHT:
+        raise PetResponseError(
+            f"Pet sprite must contain exactly {_SPRITE_HEIGHT} pixel rows."
+        )
+    sprite: list[str] = []
+    for index, row in enumerate(value, start=1):
+        if not isinstance(row, str):
+            raise PetResponseError(f"Pet sprite row {index} must be text.")
+        if len(row) != _SPRITE_WIDTH or any(
+            pixel not in _SPRITE_PIXELS for pixel in row
+        ):
+            raise PetResponseError(
+                f"Pet sprite row {index} must be exactly {_SPRITE_WIDTH} "
+                "characters using only '.', '1', '2', and '3'."
+            )
+        sprite.append(row)
+    used_pixels = set("".join(sprite))
+    if not {"1", "2", "3"}.issubset(used_pixels):
+        raise PetResponseError("Pet sprite must use all 3 palette colors.")
+    return tuple(sprite)
+
+
 def _is_single_line_printable(value: str) -> bool:
     return bool(value) and all(
         char.isprintable()
@@ -801,7 +896,10 @@ def _scrub_secret(message: str, secret: str) -> str:
 
 _SYSTEM_PROMPT = """\
 You create a friendly pet for a terminal vocabulary survival game.
-Use the uploaded image only as visual inspiration. Never identify a person.
+Abstract only non-identifying visual motifs from the uploaded image: its palette,
+silhouette, texture, mood, or accessories. Never identify a person or infer
+sensitive traits. If a person appears, do not recreate their face or body; make
+an unrelated fictional non-human pet inspired only by safe visual motifs.
 Return exactly one JSON object with exactly these fields:
 - "name": 1-20 letters/numbers, spaces, apostrophes, or hyphens
 - "species": 1-32 letters/numbers, spaces, apostrophes, or hyphens
@@ -810,5 +908,10 @@ Return exactly one JSON object with exactly these fields:
 - "vision_bonus": an integer from 1 to 3
 - "catchphrase": one short, single-line phrase, at most 96 characters
 - "portrait": an array of 1-7 printable ASCII-art lines, each at most 24 characters
+- "palette": exactly 3 distinct colors in #RRGGBB format, ordered as main/outline,
+  secondary, then highlight
+- "sprite": exactly 6 strings of exactly 7 characters each; use only "." for
+  transparency and "1", "2", "3" for the matching palette colors
+The sprite must be a centered, readable, full-body pet and use all three colors.
 Do not use Markdown, ANSI escapes, extra fields, or explanatory text.
 """

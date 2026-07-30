@@ -365,7 +365,16 @@ class GameEngine:
                 position.x,
             ),
         )
-        self.pet_position = self.player_position
+        # Spawn the companion beside the player so its full sprite is visible
+        # from the opening frame. It still follows the player's previous tile.
+        self.pet_position = next(
+            (
+                self.player_position.moved(dx, dy)
+                for dx, dy in ((-1, 0), (1, 0), (0, 1), (0, -1))
+                if self.player_position.moved(dx, dy) in spawn_area
+            ),
+            self.player_position,
+        )
         self._spawn_area = spawn_area
         self._monsters = self._spawn_stage(0)
         self._weather = self._weather_at_tick(0)
@@ -726,15 +735,36 @@ class GameEngine:
             raise ValueError("The map does not have enough monster positions.")
 
         # Prefer positions that do not spawn directly beside the player.  The
-        # deterministic fallback still supports small custom maps.
+        # deterministic fallback still supports small custom maps. Keep one
+        # monster inside the opening camera and vision disc so the pixel-game
+        # objective is visible immediately rather than starting on an empty
+        # scene.
+        showcase = next(
+            (
+                position
+                for position in candidates
+                if position in self.visible_positions
+                and position.manhattan_distance(self.player_position) > 2
+                and abs(position.x - self.player_position.x) <= 5
+                and abs(position.y - self.player_position.y) <= 2
+            ),
+            None,
+        )
         far = [
             position
             for position in candidates
-            if position.manhattan_distance(self.player_position) > 2
+            if position != showcase
+            and position.manhattan_distance(self.player_position) > 2
         ]
         far_set = set(far)
-        near = [position for position in candidates if position not in far_set]
-        positions = (far + near)[:monster_count]
+        near = [
+            position
+            for position in candidates
+            if position != showcase and position not in far_set
+        ]
+        positions = (([showcase] if showcase is not None else []) + far + near)[
+            :monster_count
+        ]
 
         alphabet = [
             letter for letter in "abcdefghijklmnopqrstuvwxyz" if letter != expected

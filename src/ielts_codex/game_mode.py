@@ -27,6 +27,8 @@ from .game_engine import (
 )
 from .models import Rating, Word
 from .pet_api import (
+    DEFAULT_PET_PALETTE,
+    DEFAULT_PET_SPRITE,
     PROVIDER_PROFILES,
     PetAPIClient,
     PetAPIConfig,
@@ -36,6 +38,11 @@ from .pet_api import (
     load_api_config,
     prepare_image,
 )
+from .pixel_art import (
+    VIEWPORT_COLUMNS,
+    render_pet_preview,
+    render_pixel_viewport,
+)
 from .storage import ProgressStore
 from .ui import TerminalUI
 from .word_bank import WordBank
@@ -43,10 +50,10 @@ from .word_bank import WordBank
 
 GAME_DEFAULT_COUNT = 3
 GAME_MAX_COUNT = 10
-GAME_SCHEMA_VERSION = 1
+GAME_SCHEMA_VERSION = 2
 FRAME_SECONDS = 0.1
 TURN_SECONDS = 0.25
-MIN_ANIMATED_COLUMNS = 68
+MIN_ANIMATED_COLUMNS = 80
 MIN_ANIMATED_ROWS = 24
 
 DEFAULT_PET = PetProfile(
@@ -152,11 +159,19 @@ class GameProfileStore:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
             if not isinstance(payload, dict):
                 raise GameStoreError("The game save must be a JSON object.")
-            if payload.get("version") != GAME_SCHEMA_VERSION:
+            version = payload.get("version")
+            pet_record = payload.get("pet")
+            if isinstance(version, bool) or not isinstance(version, int):
                 raise GameStoreError(
-                    f"Unsupported game save version {payload.get('version')!r}."
+                    f"Unsupported game save version {version!r}."
                 )
-            return SavedPet.from_record(payload.get("pet"))
+            if version == 1:
+                pet_record = _migrate_v1_pet_record(pet_record)
+            elif version != GAME_SCHEMA_VERSION:
+                raise GameStoreError(
+                    f"Unsupported game save version {version!r}."
+                )
+            return SavedPet.from_record(pet_record)
         except GameStoreError:
             raise
         except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
@@ -420,7 +435,7 @@ class GameMode:
             return False
 
         lines = [
-            *saved.profile.portrait,
+            *render_pet_preview(saved.profile, colour=self.ui.color),
             "",
             f"{saved.profile.glyph} {saved.profile.name} · {saved.profile.species}",
             saved.profile.personality,
@@ -441,7 +456,7 @@ class GameMode:
         self.ui.panel(
             "game · companion",
             [
-                *pet.profile.portrait,
+                *render_pet_preview(pet.profile, colour=self.ui.color),
                 "",
                 f"{pet.profile.glyph} {pet.profile.name} · {pet.profile.species}",
                 pet.profile.personality,
@@ -578,6 +593,7 @@ class GameMode:
                     paused=clock.paused,
                     quit_pending=quit_pending,
                     show_help=show_help,
+                    animation_tick=int(now / FRAME_SECONDS),
                 )
                 if frame != last_frame:
                     cleared_frame = "\033[K\n".join(frame.splitlines()) + "\033[K"
@@ -711,6 +727,7 @@ class GameMode:
         quit_pending: bool = False,
         show_help: bool = False,
         compact: bool = False,
+        animation_tick: int | None = None,
     ) -> str:
         state = "眩晕" if snapshot.is_dizzy else "饥饿" if snapshot.is_hungry else "正常"
         if paused:
@@ -719,9 +736,13 @@ class GameMode:
         health_bar = _meter(snapshot.health, engine.config.max_health, 10)
         hunger_bar = _meter(snapshot.hunger, engine.config.max_hunger, 10)
         pattern = " ".join(snapshot.captured_pattern)
-        frame_width = max(
-            engine.config.width,
-            min(shutil.get_terminal_size((80, 24)).columns, 88),
+        frame_width = (
+            max(
+                engine.config.width,
+                min(shutil.get_terminal_size((80, 24)).columns, 88),
+            )
+            if compact
+            else VIEWPORT_COLUMNS
         )
         title = _truncate_cells(
             f"IELTS CODEX // STORM RUN {index}/{total}",
@@ -746,7 +767,23 @@ class GameMode:
             ),
             _truncate_cells(f"拼写  {pattern}", frame_width),
         ]
-        map_lines = self._render_map(engine, snapshot, pet, explored)
+        map_lines = (
+            self._render_map(engine, snapshot, pet, explored)
+            if compact
+            else render_pixel_viewport(
+                engine,
+                snapshot,
+                pet,
+                explored=explored,
+                animation_tick=(
+                    snapshot.weather.tick
+                    if animation_tick is None
+                    else animation_tick
+                ),
+                player_frame=metrics.moves,
+                colour=self.ui.color,
+            )
+        )
         footer = [
             messages[-2] if len(messages) >= 2 else "",
             messages[-1] if messages else "",
@@ -1072,6 +1109,21 @@ def _format_bytes(value: int) -> str:
     if value < 1024 * 1024:
         return f"{value / 1024:.1f} KiB"
     return f"{value / (1024 * 1024):.1f} MiB"
+
+
+def _migrate_v1_pet_record(value: object) -> object:
+    """Add the indexed sprite fields introduced by game save schema v2."""
+
+    if not isinstance(value, dict):
+        return value
+    migrated = dict(value)
+    profile = value.get("profile")
+    if isinstance(profile, dict):
+        migrated_profile = dict(profile)
+        migrated_profile.setdefault("palette", list(DEFAULT_PET_PALETTE))
+        migrated_profile.setdefault("sprite", list(DEFAULT_PET_SPRITE))
+        migrated["profile"] = migrated_profile
+    return migrated
 
 
 def _safe_single_line(value: str) -> bool:
