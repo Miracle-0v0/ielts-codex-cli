@@ -164,13 +164,28 @@ class MiniTerminal:
         ]
         if final == "m":
             self._sgr(values)
-        elif final == "J" and 2 in values:
-            self.cells = self._blank_screen()
-            self.row = self.column = 0
+        elif final == "J":
+            mode = values[0] if values else 0
+            if mode == 2:
+                self.cells = self._blank_screen()
+                self.row = self.column = 0
+            elif mode == 0:
+                for column in range(self.column, self.columns):
+                    self.cells[self.row][column] = Cell()
+                for row in range(self.row + 1, self.rows):
+                    self.cells[row] = self._blank_row()
         elif final in {"H", "f"}:
             self.row = max(0, min(self.rows - 1, (values[0] or 1) - 1))
             target = values[1] if len(values) > 1 else 1
             self.column = max(0, min(self.columns - 1, (target or 1) - 1))
+        elif final == "A":
+            self.row = max(0, self.row - (values[0] or 1))
+        elif final == "B":
+            self.row = min(self.rows - 1, self.row + (values[0] or 1))
+        elif final == "C":
+            self.column = min(self.columns - 1, self.column + (values[0] or 1))
+        elif final == "D":
+            self.column = max(0, self.column - (values[0] or 1))
         elif final == "K":
             for column in range(self.column, self.columns):
                 self.cells[self.row][column] = Cell()
@@ -321,7 +336,7 @@ def _render_frame(
         draw.ellipse((x - 6, 16, x + 6, 28), fill=color)
     draw.text(
         (width // 2, 22),
-        "ielts-codex 0.3.0  ·  real CLI session",
+        "ielts-codex 0.3.1  ·  real CLI session",
         font=latin_bold_font,
         fill=(210, 214, 220),
         anchor="mm",
@@ -663,9 +678,8 @@ def _record_session(
         animation.hold(caption, 5)
 
         caption = "3 · Start a focused environment vocabulary card"
-        animation.type_command("/learn 1 environment", caption)
         child.sendline("/learn 1 environment")
-        animation.output(_read_expect(child, "› "), caption)
+        animation.output(_read_expect(child, "q 结束  › "), caption)
         animation.hold(caption, 5)
 
         caption = "4 · Reveal bilingual details and OEWN attribution"
@@ -681,7 +695,6 @@ def _record_session(
         animation.hold(caption, 6)
 
         caption = "6 · Spell the word from its Chinese definition"
-        animation.type_command("/quiz 1 environment", caption)
         child.sendline("/quiz 1 environment")
         animation.output(_read_expect(child, "answer › "), caption)
         animation.hold(caption, 6)
@@ -693,25 +706,27 @@ def _record_session(
         animation.hold(caption, 6)
 
         caption = "8 · Search any word for its complete learning card"
-        animation.type_command("conservation", caption)
         child.sendline("conservation")
-        animation.output(_read_expect(child, "› "), caption)
+        search_output = _read_expect(child, "来源")
+        search_output += _read_expect(child, "› ")
+        animation.output(search_output, caption)
         animation.hold(caption, 8)
 
         caption = "9 · Review learning progress and accuracy"
-        animation.type_command("/stats", caption)
         child.sendline("/stats")
-        animation.output(_read_expect(child, "› "), caption)
+        stats_output = _read_expect(child, "累计动作")
+        stats_output += _read_expect(child, "› ")
+        animation.output(stats_output, caption)
         animation.hold(caption, 7)
 
         caption = "10 · Inspect the local OEWN synchronization status"
-        animation.type_command("/sync status", caption)
         child.sendline("/sync status")
-        animation.output(_read_expect(child, "› "), caption)
+        sync_output = _read_expect(child, "位置")
+        sync_output += _read_expect(child, "› ")
+        animation.output(sync_output, caption)
         animation.hold(caption, 8)
 
         caption = "11 · Quit — progress is saved locally"
-        animation.type_command("/quit", caption)
         child.sendline("/quit")
         animation.output(_read_expect(child, pexpect.EOF), caption)
         animation.hold(caption, 8)

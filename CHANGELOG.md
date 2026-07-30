@@ -2,6 +2,15 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.3.1] - 2026-07-30
+
+### Changed
+
+- Added a filterable Codex-style slash-command palette with Up/Down selection,
+  Enter submission, and Tab/Right completion.
+- Kept command rows aligned during repeated keyboard navigation by preserving
+  terminal newline processing.
+
 ## [0.3.0] - 2026-07-30
 
 ### Added
@@ -33,5 +42,6 @@ Initial public release.
 - Search across English words, Chinese meanings, and synonyms.
 - An MIT license and open-source contribution guide.
 
+[0.3.1]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Miracle-0v0/ielts-codex-cli/releases/tag/v0.2.0

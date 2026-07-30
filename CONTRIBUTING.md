@@ -36,6 +36,13 @@ python3 ielts.py --version
 Do not commit personal learning progress, virtual environments, build
 artifacts, or credentials.
 
+## Versioning
+
+The project follows Semantic Versioning. Iterative visual, interaction,
+animation, compatibility, and other small improvements to an existing feature
+use patch releases, such as `0.3.0` to `0.3.1`. New commands or substantial new
+capabilities use a minor release; incompatible changes require a major release.
+
 ## Reporting issues
 
 Include your operating system, Python version, reproduction command, actual

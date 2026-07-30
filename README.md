@@ -22,7 +22,7 @@ user-approved sync can refresh English definitions from Open English WordNet
 
 ## Features
 
-- Codex-style interactive prompt and slash commands
+- Filterable Codex-style slash-command palette with keyboard selection
 - New-word learning and due-card review
 - Chinese-to-English spelling quizzes
 - Again / Hard / Good / Easy spaced-repetition ratings
@@ -67,6 +67,11 @@ ielts-codex
 | `/sync [status] [--force] [--dry-run]` | Sync OEWN definitions or inspect the local cache |
 | `/clear` | Clear the terminal |
 | `/quit` | Save and exit |
+
+At the main prompt, type `/` to open the command palette. Use the up and down
+arrow keys to select a command, `Enter` to run it, or `Tab`/the right arrow to
+complete it before adding arguments. Non-interactive input automatically falls
+back to the plain line prompt.
 
 The count and topic can appear in either order:
 

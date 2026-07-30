@@ -33,6 +33,21 @@ TOPIC_ALIASES = {
     "文化": "culture",
     "工作": "work",
 }
+SLASH_COMMANDS = (
+    ("/learn", "学习未见单词"),
+    ("/review", "复习到期卡片"),
+    ("/quiz", "中文到英文拼写"),
+    ("/search", "查询单词或释义"),
+    ("/words", "浏览词表"),
+    ("/topics", "查看主题"),
+    ("/today", "查看今日计划"),
+    ("/stats", "查看学习统计"),
+    ("/goal", "修改每日目标"),
+    ("/sync", "更新英文释义"),
+    ("/clear", "清屏"),
+    ("/help", "查看命令帮助"),
+    ("/quit", "保存并退出"),
+)
 
 
 @dataclass(slots=True)
@@ -71,7 +86,7 @@ class IELTSApp:
 
         while self.running:
             try:
-                line = self.ui.prompt()
+                line = self.ui.command_prompt(SLASH_COMMANDS)
             except EOFError:
                 self.ui.write()
                 break
