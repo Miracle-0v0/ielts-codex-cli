@@ -7,3 +7,6 @@ dist/
 build/
 .venv/
 /my-progress/
+/.ielts-codex/
+/oewn_overlay.json
+/tests/

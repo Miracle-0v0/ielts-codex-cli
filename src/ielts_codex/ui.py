@@ -154,6 +154,7 @@ class TerminalUI:
             f"        {word.example_zh}",
             f"近义词  {', '.join(word.synonyms)}",
             f"主题    {word.topic}",
+            f"来源    {word.definition_source} · {word.definition_license}",
         ]
         if progress and progress.state != "new":
             lines.extend(

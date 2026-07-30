@@ -6,7 +6,6 @@ import argparse
 import random
 import re
 import shlex
-import sys
 from dataclasses import dataclass
 from datetime import date
 from difflib import SequenceMatcher
@@ -15,6 +14,7 @@ from typing import Sequence
 
 from . import __version__
 from .models import Rating, Word
+from .oewn import OEWNSyncError, OEWNSynchronizer, load_overlay
 from .storage import ProgressFileError, ProgressStore
 from .ui import TerminalUI
 from .word_bank import WordBank
@@ -51,15 +51,18 @@ class IELTSApp:
         ui: TerminalUI,
         *,
         rng: random.Random | None = None,
+        synchronizer: OEWNSynchronizer | None = None,
     ) -> None:
         self.bank = bank
         self.store = store
         self.ui = ui
         self.rng = rng or random.Random()
+        self.synchronizer = synchronizer or OEWNSynchronizer()
         self.running = True
 
     def run(self) -> int:
         self.ui.banner()
+        self.offer_startup_sync()
         self.show_today(compact=True)
         self.ui.hint(
             "  输入 /learn 开始，/help 查看命令；直接输入单词可以查询。"
@@ -117,6 +120,7 @@ class IELTSApp:
             "stats": self._command_stats,
             "today": self._command_today,
             "goal": self._command_goal,
+            "sync": self._command_sync,
             "help": self._command_help,
             "clear": self._command_clear,
             "quit": self._command_quit,
@@ -140,6 +144,8 @@ class IELTSApp:
         count: int,
         topic: str | None,
         query: str | None = None,
+        force: bool = False,
+        dry_run: bool = False,
     ) -> int:
         if command == "learn":
             self.learn(count, topic)
@@ -158,6 +164,16 @@ class IELTSApp:
                 self.ui.error("search 需要一个单词或中文释义。")
                 return 2
             self.search(query)
+        elif command == "sync":
+            if query is None:
+                return int(
+                    not self.sync_vocabulary(force=force, dry_run=dry_run)
+                )
+            if query.lower() == "status" and not force and not dry_run:
+                self.show_sync_status()
+            else:
+                self.ui.error("用法：ielts-codex sync [status] [--force] [--dry-run]")
+                return 2
         return 0
 
     def _command_learn(self, args: list[str]) -> None:
@@ -208,6 +224,20 @@ class IELTSApp:
             return
         self.ui.success(f"每日目标已设为 {self.store.daily_goal} 个复习动作。")
 
+    def _command_sync(self, args: list[str]) -> None:
+        if args == ["status"]:
+            self.show_sync_status()
+            return
+        allowed = {"--force", "--dry-run"}
+        unknown = [arg for arg in args if arg not in allowed]
+        if unknown:
+            self.ui.warning("用法：/sync [status] [--force] [--dry-run]")
+            return
+        self.sync_vocabulary(
+            force="--force" in args,
+            dry_run="--dry-run" in args,
+        )
+
     def _command_help(self, _args: list[str]) -> None:
         self.show_help()
 
@@ -217,6 +247,135 @@ class IELTSApp:
 
     def _command_quit(self, _args: list[str]) -> None:
         self.running = False
+
+    def offer_startup_sync(self) -> None:
+        """Offer an explicit online update choice on every interactive start."""
+
+        version = self._local_oewn_version()
+        if version:
+            self.ui.hint(f"  Open English WordNet 本地版本：{version}")
+        else:
+            self.ui.hint("  Open English WordNet：尚未同步（使用内置英文释义）")
+
+        while True:
+            try:
+                answer = self.ui.prompt(
+                    "  是否联网检查并更新英文释义？ [y/N] › "
+                ).strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                self.ui.write()
+                self.ui.hint("  已跳过联网更新。")
+                return
+            if answer in {"", "n", "no", "否", "不"}:
+                self.ui.hint("  本次保持离线；可随时运行 /sync。")
+                return
+            if answer in {"y", "yes", "是", "好"}:
+                self.sync_vocabulary()
+                return
+            self.ui.hint("  请输入 y 联网更新，或按 Enter 保持离线。")
+
+    def _local_oewn_version(self) -> str | None:
+        path = self.store.oewn_overlay_path
+        if not path.exists():
+            return None
+        try:
+            payload = load_overlay(path)
+        except OEWNSyncError:
+            self.ui.warning("  本地 OEWN 缓存不可读；联网更新可自动修复。")
+            return None
+        return str(payload["provider"].get("version", "未知"))
+
+    def sync_vocabulary(
+        self,
+        *,
+        force: bool = False,
+        dry_run: bool = False,
+    ) -> bool:
+        """Synchronize OEWN English fields and keep the current bank on failure."""
+
+        mode = "预览更新" if dry_run else "检查更新"
+        self.ui.write()
+        self.ui.rule(f"sync · Open English WordNet · {mode}")
+        self.ui.hint("正在读取官方发布信息；中文释义和学习进度不会被修改…")
+        try:
+            curated_words = WordBank.bundled().words
+            result = self.synchronizer.synchronize(
+                curated_words,
+                self.store.data_dir,
+                force=force,
+                dry_run=dry_run,
+            )
+        except OEWNSyncError as exc:
+            self.ui.error(f"知识库更新失败：{exc}")
+            self.ui.hint("已继续使用当前本地词库；现有缓存没有被覆盖。")
+            return False
+        except (OSError, ValueError) as exc:
+            self.ui.error(f"无法载入更新后的知识库：{exc}")
+            self.ui.hint("已继续使用当前本地词库。")
+            return False
+
+        if result.up_to_date:
+            self.ui.success(
+                f"已是最新版本：Open English WordNet {result.release.version}"
+            )
+            self.ui.hint(f"本地覆盖：{result.overlay_path}")
+            return True
+
+        lines = [
+            f"版本      Open English WordNet {result.release.version}",
+            f"匹配      {len(result.entries)}/{len(curated_words)} 个词",
+            f"跳过      {len(result.skipped)} 个词",
+            f"释义变化  {result.changed} 个词",
+            "保留      中文释义、双语例句、主题、Band 与学习进度",
+            "许可      CC BY 4.0 · derived from Princeton WordNet",
+        ]
+        if dry_run:
+            lines.append("结果      仅预览，未写入本地覆盖文件")
+            self.ui.panel("sync preview", lines)
+            return True
+
+        try:
+            self.bank = WordBank.bundled(self.store.oewn_overlay_path)
+        except (OEWNSyncError, OSError, ValueError) as exc:
+            self.ui.error(f"更新已下载，但本地覆盖无法载入：{exc}")
+            return False
+        lines.append(f"位置      {result.overlay_path}")
+        self.ui.panel("sync complete", lines)
+        self.ui.success("英文释义已更新；人工校对的中文释义保持不变。")
+        return True
+
+    def show_sync_status(self) -> None:
+        path = self.store.oewn_overlay_path
+        if not path.exists():
+            self.ui.panel(
+                "sync status",
+                [
+                    "状态      尚未同步 Open English WordNet",
+                    "当前      使用随项目发布的英文释义",
+                    "更新      运行 /sync，或在下次启动时选择 y",
+                    f"位置      {path}",
+                ],
+            )
+            return
+        try:
+            payload = load_overlay(path)
+        except OEWNSyncError as exc:
+            self.ui.error(f"本地 OEWN 覆盖不可读：{exc}")
+            self.ui.hint("运行 /sync --force 可重新下载；基础词库仍可使用。")
+            return
+        provider = payload["provider"]
+        entries = payload["entries"]
+        self.ui.panel(
+            "sync status",
+            [
+                f"状态      已同步 {provider.get('name', 'Open English WordNet')}",
+                f"版本      {provider.get('version', '未知')}",
+                f"同步时间  {payload.get('synced_at', '未知')}",
+                f"覆盖      {len(entries)}/{len(self.bank.words)} 个词的英文释义",
+                f"许可      {provider.get('license', 'CC BY 4.0')}",
+                f"位置      {path}",
+            ],
+        )
 
     def _parse_session_args(
         self, args: list[str]
@@ -581,6 +740,7 @@ class IELTSApp:
                 "/today                  查看今天的学习计划",
                 "/stats                  查看累计学习数据",
                 "/goal <数量>            修改每日目标",
+                "/sync [status]           同步/查看 Open English WordNet 英文释义",
                 "/clear                  清屏",
                 "/quit                   保存并退出",
                 "",
@@ -600,10 +760,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=("learn", "review", "quiz", "stats", "today", "topics", "search"),
+        choices=(
+            "learn",
+            "review",
+            "quiz",
+            "stats",
+            "today",
+            "topics",
+            "search",
+            "sync",
+        ),
         help="直接执行一个命令；省略则进入交互模式",
     )
-    parser.add_argument("query", nargs="?", help="search 命令的查询内容")
+    parser.add_argument(
+        "query",
+        nargs="?",
+        help="search 的查询内容，或 sync 的 status",
+    )
     parser.add_argument("-n", "--count", type=int, default=DEFAULT_SESSION_SIZE)
     parser.add_argument("-t", "--topic", help="限定 IELTS 主题")
     parser.add_argument(
@@ -615,6 +788,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-color",
         action="store_true",
         help="禁用 ANSI 颜色",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="sync 时即使版本相同也重新下载",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="sync 时预览更新但不写入",
     )
     parser.add_argument("--seed", type=int, help=argparse.SUPPRESS)
     parser.add_argument(
@@ -630,19 +813,29 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if not 1 <= args.count <= 100:
         parser.error("--count 须在 1 到 100 之间")
+    if (args.force or args.dry_run) and args.command != "sync":
+        parser.error("--force 和 --dry-run 仅适用于 sync 命令")
     topic = IELTSApp._normalize_topic(args.topic) if args.topic else None
 
     ui = TerminalUI(color=False if args.no_color else None)
     try:
-        bank = WordBank.bundled()
-        if topic and topic not in bank.topics:
-            parser.error(
-                f"未知主题 {args.topic!r}；可选：{', '.join(bank.topics)}"
-            )
         store = ProgressStore(args.data_dir)
     except ProgressFileError as exc:
         ui.error(str(exc))
         return 2
+    except OSError as exc:
+        ui.error(f"初始化失败：{exc}")
+        return 2
+
+    try:
+        bank = WordBank.bundled(store.oewn_overlay_path)
+        if topic and topic not in bank.topics:
+            parser.error(
+                f"未知主题 {args.topic!r}；可选：{', '.join(bank.topics)}"
+            )
+    except OEWNSyncError as exc:
+        ui.warning(f"本地 OEWN 覆盖不可读，将使用基础词库：{exc}")
+        bank = WordBank.bundled()
     except (OSError, ValueError) as exc:
         ui.error(f"初始化失败：{exc}")
         return 2
@@ -660,6 +853,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 count=args.count,
                 topic=topic,
                 query=args.query,
+                force=args.force,
+                dry_run=args.dry_run,
             )
         return app.run()
     except KeyboardInterrupt:

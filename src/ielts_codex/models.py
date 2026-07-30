@@ -59,6 +59,9 @@ class Word:
     synonyms: tuple[str, ...]
     topic: str
     band: str
+    definition_source: str = "IELTS Codex curated dataset"
+    definition_license: str = "MIT"
+    definition_source_url: str = ""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Word":
@@ -88,6 +91,11 @@ class Word:
             synonyms=tuple(str(item).strip() for item in data["synonyms"]),
             topic=str(data["topic"]).strip().lower(),
             band=str(data["band"]).strip(),
+            definition_source=str(
+                data.get("definition_source", "IELTS Codex curated dataset")
+            ).strip(),
+            definition_license=str(data.get("definition_license", "MIT")).strip(),
+            definition_source_url=str(data.get("definition_source_url", "")).strip(),
         )
 
 

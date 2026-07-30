@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import date
 from difflib import SequenceMatcher
 from importlib import resources
+from pathlib import Path
 from typing import Iterable, Mapping
 
 from .models import CardProgress, Word
@@ -31,12 +32,17 @@ class WordBank:
         self._by_name = by_name
 
     @classmethod
-    def bundled(cls) -> "WordBank":
+    def bundled(cls, overlay_path: Path | str | None = None) -> "WordBank":
         resource = resources.files("ielts_codex.data").joinpath("words.json")
         payload = json.loads(resource.read_text(encoding="utf-8"))
         if not isinstance(payload, list):
             raise ValueError("words.json must contain a JSON list.")
-        return cls(Word.from_dict(item) for item in payload)
+        words = tuple(Word.from_dict(item) for item in payload)
+        if overlay_path is not None and Path(overlay_path).exists():
+            from .oewn import apply_overlay, load_overlay
+
+            words = apply_overlay(words, load_overlay(overlay_path))
+        return cls(words)
 
     @property
     def topics(self) -> tuple[str, ...]:

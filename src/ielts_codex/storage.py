@@ -52,6 +52,12 @@ class ProgressStore:
         return self.data.cards
 
     @property
+    def oewn_overlay_path(self) -> Path:
+        from .oewn import OVERLAY_FILENAME
+
+        return self.data_dir / OVERLAY_FILENAME
+
+    @property
     def daily_goal(self) -> int:
         return int(self.data.settings.get("daily_goal", DEFAULT_DAILY_GOAL))
 

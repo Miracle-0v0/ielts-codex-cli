@@ -1,10 +1,12 @@
 # Contributing to IELTS Codex
 
-感谢你愿意改进 IELTS Codex。欢迎修复缺陷、改善终端体验、扩充经过校对的词条，或完善测试与文档。
+Thank you for helping improve IELTS Codex. Bug fixes, terminal-experience
+improvements, carefully reviewed vocabulary additions, and documentation
+updates are welcome.
 
-## 开发环境
+## Development setup
 
-项目仅依赖 Python 3.10 或更高版本：
+The project requires only Python 3.10 or later:
 
 ```bash
 git clone https://github.com/Miracle-0v0/ielts-codex-cli.git
@@ -12,22 +14,30 @@ cd ielts-codex-cli
 python3 ielts.py
 ```
 
-运行测试：
+Run the local checks:
 
 ```bash
-PYTHONPATH=src python3 -m unittest discover -s tests -v
+python3 -m py_compile src/ielts_codex/*.py
+python3 ielts.py --version
 ```
 
-## 提交 Pull Request
+## Pull requests
 
-1. 从 `main` 创建一个范围明确的分支。
-2. 保持零运行时依赖，除非新依赖带来的价值经过充分说明。
-3. 行为变化需要补充或更新测试。
-4. 新词条必须包含准确的音标、词性、中英释义、双语例句、近义词、主题和分数段。
-5. 确保全部测试通过，并在 Pull Request 中说明变更目的和验证方式。
+1. Create a focused branch from `main`.
+2. Keep the application free of runtime dependencies unless a new dependency
+   provides clearly justified value.
+3. Validate the affected interactive flows locally when behavior changes.
+4. New vocabulary entries must include an accurate phonetic transcription,
+   part of speech, English and Chinese definitions, bilingual examples,
+   synonyms, topic, and band level.
+5. Explain the purpose of the change and the local verification performed in
+   the pull request.
 
-请勿提交个人学习进度、虚拟环境、构建产物或凭据。
+Do not commit personal learning progress, virtual environments, build
+artifacts, or credentials.
 
-## 报告问题
+## Reporting issues
 
-提交 Issue 时请提供操作系统、Python 版本、复现命令、实际输出和预期行为。涉及安全或隐私的信息请不要放入公开 Issue。
+Include your operating system, Python version, reproduction command, actual
+output, and expected behavior. Do not post security-sensitive or private
+information in a public issue.

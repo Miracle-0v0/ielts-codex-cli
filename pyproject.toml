@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ielts-codex"
-version = "0.2.0"
+version = "0.3.0"
 description = "A Codex-inspired, zero-dependency IELTS vocabulary trainer for the terminal."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 authors = [{ name = "IELTS Codex contributors" }]
 keywords = ["ielts", "vocabulary", "cli", "spaced-repetition"]
 classifiers = [
