@@ -4,16 +4,34 @@
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-一个受 Codex 终端交互启发的雅思背单词 CLI：斜杠命令、聚焦式单词卡片、即时反馈、间隔重复和本地学习统计。
+A Codex-inspired IELTS vocabulary trainer for the terminal, featuring slash
+commands, focused word cards, spelling practice, instant feedback, spaced
+repetition, and local progress tracking.
 
-它只使用 Python 标准库，不需要账号、联网或 API Key。
+IELTS Codex uses only the Python standard library. It requires no account,
+network connection, API key, or runtime dependency. The current learning
+interface is Chinese-first.
 
 > [!NOTE]
-> 本项目是独立的开源学习工具，并非 OpenAI 官方项目，也不隶属于或代表 OpenAI。
+> This is an independent open-source learning tool. It is not an official
+> OpenAI product and is not affiliated with or endorsed by OpenAI.
 
-## 快速开始
+## Features
 
-要求 Python 3.10 或更高版本。
+- Codex-style interactive prompt and slash commands
+- New-word learning and due-card review
+- Chinese-to-English spelling quizzes
+- Again / Hard / Good / Easy spaced-repetition ratings
+- 72 bundled words across 9 IELTS-oriented topics
+- English definitions, Chinese meanings, phonetics, bilingual examples, and synonyms
+- Local, atomic JSON progress storage
+- Daily goals, streaks, accuracy, and mastery statistics
+- English, Chinese, and synonym search
+- Zero runtime dependencies
+
+## Quick start
+
+Python 3.10 or later is required.
 
 ```bash
 git clone https://github.com/Miracle-0v0/ielts-codex-cli.git
@@ -21,65 +39,66 @@ cd ielts-codex-cli
 ./ielts.py
 ```
 
-也可以安装为 `ielts-codex` 命令：
+You can also install the `ielts-codex` command:
 
 ```bash
 python3 -m pip install .
 ielts-codex
 ```
 
-启动后会进入交互提示符：
+## Interactive commands
 
-```text
-╭─ today ─────────────────────────────────────────╮
-│ 今日进度  ░░░░░░░░░░░░░░░░░░░░  0/20           │
-│ 待复习    0 个  ·  新词 72 个  ·  连续 0 天      │
-╰─────────────────────────────────────────────────╯
-
-› /learn 10 environment
-```
-
-## 命令
-
-| 命令 | 作用 |
+| Command | Description |
 | --- | --- |
-| `/learn [数量] [主题]` | 学习未见单词，默认 10 个 |
-| `/review [数量] [主题]` | 复习今天到期的卡片 |
-| `/quiz [数量] [主题]` | 中文到英文的拼写测验 |
-| `/search <内容>` | 按英文、中文释义或近义词查询 |
-| `/words [主题]` | 浏览词表和已学状态 |
-| `/topics` | 查看各话题覆盖进度 |
-| `/today` | 查看今日目标和建议路径 |
-| `/stats` | 查看覆盖率、正确率、连续天数等统计 |
-| `/goal <数量>` | 修改每日学习目标 |
-| `/clear` | 清屏 |
-| `/quit` | 退出 |
+| `/learn [count] [topic]` | Learn unseen words; defaults to 10 |
+| `/review [count] [topic]` | Review cards that are due today |
+| `/quiz [count] [topic]` | Run a Chinese-to-English spelling quiz |
+| `/search <query>` | Search by English, Chinese meaning, or synonym |
+| `/words [topic]` | Browse words and learned status |
+| `/topics` | Show progress by topic |
+| `/today` | Show today's plan and goal |
+| `/stats` | Show coverage, accuracy, streak, and mastery |
+| `/goal <count>` | Change the daily review goal |
+| `/clear` | Clear the terminal |
+| `/quit` | Save and exit |
 
-数量和主题的顺序可以互换：
+The count and topic can appear in either order:
 
 ```text
 › /learn environment 8
-› /review 15 教育
+› /review 15 education
 › /quiz 5 technology
 ```
 
-在学习卡片中：
+During a learning or review card:
 
-- `Enter`：显示答案
-- `h`：查看挖空例句提示
-- `s`：跳过，不改变进度
-- `q`：结束当前一组
-- `1` / `2` / `3` / `4`：按 Again / Hard / Good / Easy 评价记忆程度
+- `Enter` reveals the answer.
+- `h` shows a cloze-example hint.
+- `s` skips the card without changing its schedule.
+- `q` ends the current session.
+- `1` / `2` / `3` / `4` rates recall as Again / Hard / Good / Easy.
 
-直接输入一个单词也能查询：
+Enter a bare word to open its dictionary card:
 
 ```text
 › ubiquitous
 ```
 
-## 非交互模式
+## Spelling practice
 
-适合快捷命令或 shell 脚本：
+Run:
+
+```text
+› /quiz 10
+```
+
+The quiz shows a Chinese meaning and asks for the English spelling. A correct
+answer advances the card. A misspelling reveals the answer and schedules the
+card as `Again`. Use `h` for a hint, `s` to skip, or `q` to stop.
+
+## Non-interactive mode
+
+Commands can also be called directly from a shell:
 
 ```bash
 python3 ielts.py stats
@@ -89,54 +108,105 @@ python3 ielts.py learn -n 5 -t environment
 python3 ielts.py --no-color stats
 ```
 
-## 词库与学习进度
+## Vocabulary data and provenance
 
-内置词库包含 72 个雅思核心词，分为 9 个主题：
+The bundled vocabulary is a small, static, project-maintained dataset stored in
+[`src/ielts_codex/data/words.json`](src/ielts_codex/data/words.json).
 
-`culture`、`economy`、`education`、`environment`、`health`、`science`、`society`、`technology`、`work`。
+The current 72 entries were written and curated specifically for this project
+using general IELTS-oriented vocabulary knowledge. They were not copied from a
+commercial dictionary or textbook and are released under the repository's MIT
+License. The dataset is not an official Cambridge IELTS word list.
 
-每个词包含音标、词性、中英释义、双语例句、近义词、主题和建议分数段。
+IELTS Codex is not currently connected to Cambridge, Oxford, Collins, or any
+other external dictionary or knowledge-base API. There is therefore no upstream
+database version to poll and no automatic synchronization process.
 
-内置词条及例句由项目为本工具原创整理，没有复制商业词典或教材内容，并与项目代码一同按 MIT License 发布。
+Each entry contains:
 
-学习进度默认保存在：
+- `word`
+- `phonetic`
+- `part_of_speech`
+- `meaning_zh`
+- `definition_en`
+- `example`
+- `example_zh`
+- `synonyms`
+- `topic`
+- `band`
+
+### Updating the vocabulary dataset
+
+For a normal manual update:
+
+1. Edit [`words.json`](src/ielts_codex/data/words.json).
+2. Keep `word` values lowercase and unique.
+3. Provide every required field and verify the phonetic transcription,
+   definition, translation, example, topic, and band value.
+4. If the total word or topic count changes, update the corresponding
+   expectations in
+   [`tests/test_word_bank.py`](tests/test_word_bank.py).
+5. Run the complete test suite:
+
+   ```bash
+   PYTHONPATH=src python3 -m unittest discover -s tests -v
+   ```
+
+6. Record the dataset change in [`CHANGELOG.md`](CHANGELOG.md). When publishing
+   a new package release, update the version in both `pyproject.toml` and
+   `src/ielts_codex/__init__.py`.
+
+If an external vocabulary source is adopted in the future, do not copy or
+automatically import it until its redistribution license has been verified.
+The project should then add a reproducible importer, record the source name,
+source version, retrieval date, and license, validate all imported entries, and
+review changes before replacing bundled data.
+
+## Progress storage
+
+Learning progress is stored by default at:
 
 ```text
 ~/.ielts-codex/progress.json
 ```
 
-每次评分后都会以“临时文件 + 原子替换”的方式立即保存，异常退出时也不容易损坏数据。可用 `IELTS_CODEX_HOME` 环境变量或 `--data-dir` 指定其他目录：
+Each rating is saved immediately using a temporary file followed by an atomic
+replacement. This reduces the chance of corruption after an unexpected exit.
+
+Use `IELTS_CODEX_HOME` or `--data-dir` to choose another location:
 
 ```bash
 IELTS_CODEX_HOME=./my-progress python3 ielts.py
 python3 ielts.py --data-dir ./my-progress stats
 ```
 
-## 间隔重复规则
+## Spaced-repetition behavior
 
-系统使用四档自评：
+- `Again`: a new word remains in today's queue; a lapsed review returns tomorrow.
+- `Hard`: uses a short interval and slightly lowers the ease factor.
+- `Good`: advances through 1 day, 3 days, and then adaptive intervals.
+- `Easy`: moves directly to a longer interval.
 
-- `Again`：新词留在今日队列；遗忘的旧词次日重学
-- `Hard`：短间隔复习，并略微降低难度系数
-- `Good`：按 1 天、3 天和自适应间隔推进
-- `Easy`：直接进入更长间隔
+A card is counted as mastered after reaching a 21-day interval or at least five
+successful repetitions.
 
-达到 21 天间隔或完成至少 5 次成功推进后，统计页会将单词计为“已掌握”。
-
-## 测试
+## Testing
 
 ```bash
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
-测试覆盖词库加载与检索、间隔调度、进度原子保存、损坏文件保护，以及完整的脚本化学习交互。
+The suite covers vocabulary loading and search, scheduling, atomic persistence,
+damaged-file protection, mixed-width terminal rendering, scripted learning, and
+spelling quiz behavior.
 
-## 参与贡献
+## Contributing
 
-欢迎提交 Issue 和 Pull Request。开始前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md)
+before submitting a change.
 
-版本变化记录在 [CHANGELOG.md](CHANGELOG.md)。
+Release history is available in [CHANGELOG.md](CHANGELOG.md).
 
-## 开源许可
+## License
 
-本项目采用 [MIT License](LICENSE)。
+This project is available under the [MIT License](LICENSE).
