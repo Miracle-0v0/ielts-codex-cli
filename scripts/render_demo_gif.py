@@ -46,6 +46,8 @@ LINE_HEIGHT = 24
 SIDE_MARGIN = 24
 TITLE_HEIGHT = 44
 CAPTION_HEIGHT = 50
+FRAME_DURATION_MS = 80
+OUTPUT_LINES_PER_FRAME = 2
 BACKGROUND = (13, 17, 23)
 DEFAULT_FOREGROUND = (201, 209, 217)
 CSI_RE = re.compile(r"\x1b\[([0-9;?]*)([A-Za-z])")
@@ -299,6 +301,7 @@ def _dim(color: tuple[int, int, int]) -> tuple[int, int, int]:
 def _render_frame(
     terminal: MiniTerminal,
     caption: str,
+    cursor_strength: float,
     cjk_regular_font: ImageFont.FreeTypeFont,
     cjk_bold_font: ImageFont.FreeTypeFont,
     latin_regular_font: ImageFont.FreeTypeFont,
@@ -346,6 +349,27 @@ def _render_frame(
                 fill=color,
             )
 
+    cursor_base = (95, 215, 215)
+    cursor_color = tuple(
+        round(
+            BACKGROUND[index]
+            + (channel - BACKGROUND[index]) * cursor_strength
+        )
+        for index, channel in enumerate(cursor_base)
+    )
+    cursor_column = min(terminal.column, COLS - 1)
+    cursor_x = SIDE_MARGIN + cursor_column * CELL_WIDTH
+    cursor_y = TITLE_HEIGHT + terminal.row * LINE_HEIGHT + LINE_HEIGHT - 4
+    draw.rectangle(
+        (
+            cursor_x,
+            cursor_y,
+            cursor_x + CELL_WIDTH - 2,
+            cursor_y + 2,
+        ),
+        fill=cursor_color,
+    )
+
     caption_top = TITLE_HEIGHT + ROWS * LINE_HEIGHT
     draw.rectangle((0, caption_top, width, height), fill=(21, 25, 31))
     draw.line((0, caption_top, width, caption_top), fill=(48, 54, 61), width=1)
@@ -357,6 +381,129 @@ def _render_frame(
         anchor="lm",
     )
     return image
+
+
+def _build_palette() -> Image.Image:
+    """Build one deterministic palette for compact delta-encoded frames."""
+
+    terminal_colors = (
+        DEFAULT_FOREGROUND,
+        _xterm_color(80),
+        _xterm_color(114),
+        _xterm_color(221),
+        _xterm_color(203),
+        _xterm_color(111),
+        _xterm_color(183),
+        _xterm_color(245),
+    )
+    pairs = [(color, BACKGROUND) for color in terminal_colors]
+    pairs.extend(
+        (
+            ((210, 214, 220), (31, 35, 41)),
+            ((95, 215, 215), (21, 25, 31)),
+            ((255, 95, 86), (31, 35, 41)),
+            ((255, 189, 46), (31, 35, 41)),
+            ((39, 201, 63), (31, 35, 41)),
+        )
+    )
+    colors: list[tuple[int, int, int]] = [
+        (8, 11, 16),
+        BACKGROUND,
+        (21, 25, 31),
+        (31, 35, 41),
+        (48, 54, 61),
+    ]
+    for foreground, background in pairs:
+        for step in range(1, 17):
+            alpha = step / 16
+            blended = tuple(
+                round(
+                    background[index]
+                    + (channel - background[index]) * alpha
+                )
+                for index, channel in enumerate(foreground)
+            )
+            if blended not in colors:
+                colors.append(blended)
+    if len(colors) > 256:
+        raise RuntimeError("Demo palette unexpectedly exceeds 256 colors.")
+    flat = [channel for color in colors for channel in color]
+    flat.extend([0] * (768 - len(flat)))
+    palette = Image.new("P", (1, 1))
+    palette.putpalette(flat)
+    return palette
+
+
+def _output_chunks(
+    value: str,
+    lines_per_frame: int = OUTPUT_LINES_PER_FRAME,
+) -> Iterator[str]:
+    """Yield complete ANSI-safe lines in small playback chunks."""
+
+    lines = value.splitlines(keepends=True)
+    if not lines and value:
+        yield value
+        return
+    for index in range(0, len(lines), lines_per_frame):
+        yield "".join(lines[index : index + lines_per_frame])
+
+
+class Animation:
+    """Turn a real CLI transcript into smooth, fixed-rate terminal frames."""
+
+    def __init__(
+        self,
+        terminal: MiniTerminal,
+        cjk_regular_font: ImageFont.FreeTypeFont,
+        cjk_bold_font: ImageFont.FreeTypeFont,
+        latin_regular_font: ImageFont.FreeTypeFont,
+        latin_bold_font: ImageFont.FreeTypeFont,
+    ) -> None:
+        self.terminal = terminal
+        self.cjk_regular_font = cjk_regular_font
+        self.cjk_bold_font = cjk_bold_font
+        self.latin_regular_font = latin_regular_font
+        self.latin_bold_font = latin_bold_font
+        self.palette = _build_palette()
+        self.frames: list[Image.Image] = []
+        self.durations: list[int] = []
+
+    def snapshot(self, caption: str) -> None:
+        pulse = (0.42, 0.64, 0.92, 0.64)[len(self.frames) % 4]
+        rendered = _render_frame(
+            self.terminal,
+            caption,
+            pulse,
+            self.cjk_regular_font,
+            self.cjk_bold_font,
+            self.latin_regular_font,
+            self.latin_bold_font,
+        )
+        self.frames.append(
+            rendered.quantize(palette=self.palette, dither=Image.Dither.NONE)
+        )
+        self.durations.append(FRAME_DURATION_MS)
+
+    def output(self, value: str, caption: str) -> None:
+        for chunk in _output_chunks(value):
+            self.terminal.feed(chunk)
+            self.snapshot(caption)
+
+    def type_command(self, value: str, caption: str) -> None:
+        # TerminalUI resets prompt styling before the terminal echoes input.
+        self.terminal.feed("\x1b[0m")
+        for char in value:
+            self.terminal.feed(char)
+            self.snapshot(caption)
+        self.press_enter(caption)
+
+    def press_enter(self, caption: str) -> None:
+        self.terminal.feed("\r\n")
+        self.snapshot(caption)
+
+    def hold(self, caption: str, frame_count: int) -> None:
+        for _ in range(frame_count):
+            self.snapshot(caption)
 
 
 def _demo_overlay() -> dict[str, object]:
@@ -435,16 +582,17 @@ def _demo_data_directory() -> Iterator[Path]:
             )
 
 
-def _feed_expect(
+def _read_expect(
     child: pexpect.spawn,
-    terminal: MiniTerminal,
     pattern: str | Pattern[str] | object,
-) -> None:
+) -> str:
     child.expect(pattern)
+    output = ""
     if isinstance(child.before, str):
-        terminal.feed(child.before)
+        output += child.before
     if isinstance(child.after, str):
-        terminal.feed(child.after)
+        output += child.after
+    return output
 
 
 def _record_session(
@@ -454,21 +602,13 @@ def _record_session(
     latin_bold_font: ImageFont.FreeTypeFont,
 ) -> tuple[list[Image.Image], list[int]]:
     terminal = MiniTerminal()
-    frames: list[Image.Image] = []
-    durations: list[int] = []
-
-    def snapshot(caption: str, duration: int) -> None:
-        frames.append(
-            _render_frame(
-                terminal,
-                caption,
-                cjk_regular_font,
-                cjk_bold_font,
-                latin_regular_font,
-                latin_bold_font,
-            )
-        )
-        durations.append(duration)
+    animation = Animation(
+        terminal,
+        cjk_regular_font,
+        cjk_bold_font,
+        latin_regular_font,
+        latin_bold_font,
+    )
 
     with _demo_data_directory() as data_dir:
         (data_dir / "oewn_overlay.json").write_text(
@@ -509,55 +649,77 @@ def _record_session(
             encoding="utf-8",
             timeout=15,
             dimensions=(ROWS, COLS),
+            echo=False,
         )
 
-        _feed_expect(child, terminal, "› ")
-        snapshot("1 · Choose whether to update OEWN on startup", 1700)
+        caption = "1 · Choose whether to update OEWN on startup"
+        animation.output(_read_expect(child, "› "), caption)
+        animation.hold(caption, 5)
 
+        animation.type_command("n", caption)
         child.sendline("n")
-        _feed_expect(child, terminal, "› ")
-        snapshot("2 · Stay offline and open today's learning dashboard", 1500)
+        caption = "2 · Stay offline and open today's learning dashboard"
+        animation.output(_read_expect(child, "› "), caption)
+        animation.hold(caption, 5)
 
+        caption = "3 · Start a focused environment vocabulary card"
+        animation.type_command("/learn 1 environment", caption)
         child.sendline("/learn 1 environment")
-        _feed_expect(child, terminal, "› ")
-        snapshot("3 · Start a focused environment vocabulary card", 1700)
+        animation.output(_read_expect(child, "› "), caption)
+        animation.hold(caption, 5)
 
+        caption = "4 · Reveal bilingual details and OEWN attribution"
+        animation.press_enter(caption)
         child.sendline("")
-        _feed_expect(child, terminal, "评价记忆程度 › ")
-        snapshot("4 · Reveal bilingual details and OEWN attribution", 2400)
+        animation.output(_read_expect(child, "评价记忆程度 › "), caption)
+        animation.hold(caption, 8)
 
+        caption = "5 · Rate recall for adaptive spaced repetition"
+        animation.type_command("3", caption)
         child.sendline("3")
-        _feed_expect(child, terminal, "› ")
-        snapshot("5 · Rate recall for adaptive spaced repetition", 1800)
+        animation.output(_read_expect(child, "› "), caption)
+        animation.hold(caption, 6)
 
+        caption = "6 · Spell the word from its Chinese definition"
+        animation.type_command("/quiz 1 environment", caption)
         child.sendline("/quiz 1 environment")
-        _feed_expect(child, terminal, "answer › ")
-        snapshot("6 · Spell the word from its Chinese definition", 1900)
+        animation.output(_read_expect(child, "answer › "), caption)
+        animation.hold(caption, 6)
 
+        caption = "7 · Get immediate spelling feedback"
+        animation.type_command("conservation", caption)
         child.sendline("conservation")
-        _feed_expect(child, terminal, "› ")
-        snapshot("7 · Get immediate spelling feedback", 1700)
+        animation.output(_read_expect(child, "› "), caption)
+        animation.hold(caption, 6)
 
+        caption = "8 · Search any word for its complete learning card"
+        animation.type_command("conservation", caption)
         child.sendline("conservation")
-        _feed_expect(child, terminal, "› ")
-        snapshot("8 · Search any word for its complete learning card", 2300)
+        animation.output(_read_expect(child, "› "), caption)
+        animation.hold(caption, 8)
 
+        caption = "9 · Review learning progress and accuracy"
+        animation.type_command("/stats", caption)
         child.sendline("/stats")
-        _feed_expect(child, terminal, "› ")
-        snapshot("9 · Review learning progress and accuracy", 1800)
+        animation.output(_read_expect(child, "› "), caption)
+        animation.hold(caption, 7)
 
+        caption = "10 · Inspect the local OEWN synchronization status"
+        animation.type_command("/sync status", caption)
         child.sendline("/sync status")
-        _feed_expect(child, terminal, "› ")
-        snapshot("10 · Inspect the local OEWN synchronization status", 2100)
+        animation.output(_read_expect(child, "› "), caption)
+        animation.hold(caption, 8)
 
+        caption = "11 · Quit — progress is saved locally"
+        animation.type_command("/quit", caption)
         child.sendline("/quit")
-        _feed_expect(child, terminal, pexpect.EOF)
-        snapshot("11 · Quit — progress is saved locally", 1800)
+        animation.output(_read_expect(child, pexpect.EOF), caption)
+        animation.hold(caption, 8)
         child.close()
         if child.exitstatus not in (None, 0):
             raise RuntimeError(f"CLI demo exited with status {child.exitstatus}")
 
-    return frames, durations
+    return animation.frames, animation.durations
 
 
 def _save_gif(
@@ -572,8 +734,8 @@ def _save_gif(
         append_images=frames[1:],
         duration=durations,
         loop=0,
-        optimize=True,
-        disposal=2,
+        optimize=False,
+        disposal=1,
     )
 
 
@@ -624,7 +786,11 @@ def main() -> int:
     output = args.output.resolve()
     _save_gif(frames, durations, output)
     size = output.stat().st_size / (1024 * 1024)
-    print(f"Rendered {len(frames)} real CLI frames to {output} ({size:.2f} MiB)")
+    total_seconds = sum(durations) / 1000
+    print(
+        f"Rendered {len(frames)} real CLI frames ({total_seconds:.1f}s, "
+        f"{FRAME_DURATION_MS}ms/frame) to {output} ({size:.2f} MiB)"
+    )
     return 0
 
 
