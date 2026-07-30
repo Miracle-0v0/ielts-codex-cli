@@ -32,6 +32,8 @@ user-approved sync can refresh English definitions from Open English WordNet
 - Daily goals, streaks, accuracy, and mastery statistics
 - English, Chinese, and synonym search
 - Optional Open English WordNet 2025 English-definition sync
+- Experimental storm-survival spelling game with fog, hunger, and a companion
+- Optional image-inspired pet creation through a bring-your-own-key vision API
 - Zero runtime dependencies
 
 ## Quick start
@@ -65,8 +67,17 @@ ielts-codex
 | `/stats` | Show coverage, accuracy, streak, and mastery |
 | `/goal <count>` | Change the daily review goal |
 | `/sync [status] [--force] [--dry-run]` | Sync OEWN definitions or inspect the local cache |
+| `/game [count] [topic]` | Start an experimental spelling expedition |
+| `/game pet create <image>` | Create a companion with a user-configured vision API |
+| `/game pet status` | Inspect the locally saved companion metadata |
+| `/game providers` | Show supported API provider profiles |
 | `/clear` | Clear the terminal |
 | `/quit` | Save and exit |
+
+At the main prompt, type `/` to open the command palette. Use the up and down
+arrow keys to select a command, `Enter` to run it, or `Tab`/the right arrow to
+complete it before adding arguments. Non-interactive input automatically falls
+back to the plain line prompt.
 
 The count and topic can appear in either order:
 
@@ -102,6 +113,90 @@ The quiz shows a Chinese meaning and asks for the English spelling. A correct
 answer advances the card. A misspelling reveals the answer and schedules the
 card as `Again`. Use `h` for a hint, `s` to skip, or `q` to stop.
 
+## Experimental game mode
+
+Version 0.4.0 introduces a terminal survival expedition:
+
+```text
+› /game
+› /game 3 environment
+```
+
+Move with `WASD` or the arrow keys and walk into letter monsters in the exact
+spelling order. A wrong monster costs hunger. Rain moves across the visible
+ground, unexplored cells stay under fog, and taking too long progresses through
+hunger, dizziness, and health loss. Your pet follows behind and extends the
+visible area.
+
+The two help channels are intentionally separate:
+
+- `h` advances through learning hints: phonetics, a cloze example, synonyms,
+  and finally the next letter.
+- `g` asks the pet for a rough direction to the current target without
+  revealing the letter.
+
+Hints are drawn only from the existing curated word fields. The vision API does
+not invent definitions, etymologies, examples, or mnemonics. A successful round
+updates the same spaced-repetition card used by `/learn`, `/review`, and
+`/quiz`. Passive pet visibility is free. Requesting a learning hint or pet
+direction caps the result at `Hard`, while directly revealing the next letter
+records `Again`.
+
+Interactive terminals use a smooth alternate-screen animation. Redirected
+input, `TERM=dumb`, and terminals that are too small automatically use a
+turn-based interface so slow input is not punished by wall-clock time.
+
+### Create a pet from an image
+
+The game includes a small offline puppy that follows the player and opens the
+fog by default. Creating a custom pet is optional and replaces that puppy's
+profile using your own vision-model account and API key. Configure a provider
+before launching IELTS Codex:
+
+```bash
+export IELTS_CODEX_GAME_PROVIDER=kimi
+export IELTS_CODEX_GAME_MODEL='<vision-capable-model-id>'
+read -rsp 'API key: ' IELTS_CODEX_GAME_API_KEY
+export IELTS_CODEX_GAME_API_KEY
+ielts-codex
+```
+
+Then run:
+
+```text
+› /game pet create ./my-pet-photo.jpg
+```
+
+Supported provider profiles use OpenAI-compatible Chat Completions:
+
+| Provider value | Default request endpoint |
+| --- | --- |
+| `openai` | `https://api.openai.com/v1/chat/completions` |
+| `kimi` | `https://api.moonshot.ai/v1/chat/completions` |
+| `qwen` | `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions` |
+| `glm` | `https://open.bigmodel.cn/api/paas/v4/chat/completions` |
+| `custom` | Set `IELTS_CODEX_GAME_API_URL` |
+
+No model ID is hard-coded because available multimodal models change. Select a
+model that accepts image input. `IELTS_CODEX_GAME_API_URL` can also override a
+named profile, which is useful for a regional or workspace-specific Qwen
+endpoint and for compatible gateways.
+
+Before any upload, the CLI displays the provider, model, destination host,
+image type, and image size, then asks for explicit confirmation. The API key,
+raw image, Base64 payload, and original path are never written to the progress
+store, and redirects are refused so the request cannot silently change hosts.
+Only the validated pet profile, provider/model metadata, destination host,
+timestamp, and image SHA-256 digest are saved locally.
+
+The provider schemas and endpoints follow the official
+[OpenAI Chat Completions](https://platform.openai.com/docs/api-reference/chat),
+[Kimi Chat Completion](https://platform.kimi.ai/docs/api/chat),
+[Qwen OpenAI-compatible Chat](https://help.aliyun.com/en/model-studio/qwen-api-via-openai-chat-completions),
+and [GLM vision-model](https://docs.bigmodel.cn/cn/guide/models/free/glm-4.6v-flash)
+documentation. Provider charges and data policies belong to the selected
+service; IELTS Codex does not proxy the request.
+
 ## Non-interactive mode
 
 Commands can also be called directly from a shell:
@@ -113,6 +208,7 @@ python3 ielts.py search biodiversity
 python3 ielts.py learn -n 5 -t environment
 python3 ielts.py --no-color stats
 python3 ielts.py sync
+python3 ielts.py game -n 3 -t environment
 ```
 
 ## Vocabulary data and provenance
@@ -227,6 +323,14 @@ Learning progress is stored by default at:
 
 Each rating is saved immediately using a temporary file followed by an atomic
 replacement. This reduces the chance of corruption after an unexpected exit.
+
+Game companion metadata is stored separately at:
+
+```text
+~/.ielts-codex/game.json
+```
+
+That file never contains an API key or image payload.
 
 Use `IELTS_CODEX_HOME` or `--data-dir` to choose another location:
 
