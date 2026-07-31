@@ -14,6 +14,12 @@ cd ielts-codex-cli
 ./run.sh
 ```
 
+On Windows Command Prompt, use the native launcher instead:
+
+```bat
+run.bat
+```
+
 Run the local checks:
 
 ```bash
@@ -21,6 +27,9 @@ Run the local checks:
 python3 -m py_compile src/ielts_codex/*.py
 ./run.sh --version
 ```
+
+The repository's launcher compatibility workflow repeats the version check on
+Ubuntu, macOS, and Windows for every change to `main` and every pull request.
 
 ## Pull requests
 

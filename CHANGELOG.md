@@ -4,6 +4,23 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.5] - 2026-07-31
+
+### Added
+
+- Added a native Windows Command Prompt launcher, `run.bat`, backed by a
+  PowerShell bootstrap that preserves the Python 3.10+ requirement and the
+  isolated uv-managed Python 3.12 fallback.
+- Added Ubuntu, macOS, and Windows launcher checks, including a Windows uv
+  cold-bootstrap test, to the GitHub Actions workflow.
+
+### Fixed
+
+- Documented platform-specific startup commands so Windows users no longer
+  attempt to run the Unix-only `./run.sh` command in `cmd.exe`.
+- Kept Windows bootstrap files, caches, and Python installations under the
+  ignored `.ielts-bootstrap` directory without changing system Python or PATH.
+
 ## [0.6.4] - 2026-07-31
 
 ### Changed
@@ -186,6 +203,7 @@ Initial public release.
 - Search across English words, Chinese meanings, and synonyms.
 - An MIT license and open-source contribution guide.
 
+[0.6.5]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.4...v0.6.5
 [0.6.4]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.1...v0.6.2

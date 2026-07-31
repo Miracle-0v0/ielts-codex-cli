@@ -1,0 +1,43 @@
+name: Launcher compatibility
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  launch:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Verify Windows launcher
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: run.bat --version
+      - name: Verify Windows uv fallback
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          set "PATH=%SystemRoot%\System32"
+          set "IELTS_CODEX_BOOTSTRAP_DIR=%RUNNER_TEMP%\ielts-codex-bootstrap"
+          echo y|run.bat --version
+      - name: Verify Bash launcher
+        if: runner.os != 'Windows'
+        shell: bash
+        run: ./run.sh --version

@@ -53,29 +53,51 @@ ignored `.ielts-bootstrap` directory. It never invokes APT or another system
 package manager, needs no `sudo`, does not replace the system Python, and does
 not edit shell profiles or `PATH`. Later launches reuse that local Python.
 
+### Windows Command Prompt
+
+```bat
+git clone https://github.com/Miracle-0v0/ielts-codex-cli.git
+cd ielts-codex-cli
+run.bat
+```
+
+From PowerShell, use `.\run.bat`. Do not use `./run.sh` in Windows Command
+Prompt: `.sh` is a Bash script format and `cmd.exe` cannot execute it.
+
+### Ubuntu, other Linux distributions, and macOS
+
 ```bash
 git clone https://github.com/Miracle-0v0/ielts-codex-cli.git
 cd ielts-codex-cli
 ./run.sh
 ```
 
-`run.sh` is safe to use from a path containing spaces. To use a particular
-interpreter, set `IELTS_CODEX_PYTHON`; to prohibit automatic installation, set
-`IELTS_CODEX_NO_AUTO_INSTALL=1`:
+Both launchers are safe to use from a path containing spaces. To use a
+particular interpreter, set `IELTS_CODEX_PYTHON`; to prohibit the uv fallback,
+set `IELTS_CODEX_NO_AUTO_INSTALL=1`:
 
 ```bash
 IELTS_CODEX_PYTHON=/usr/bin/python3.11 ./run.sh
 IELTS_CODEX_NO_AUTO_INSTALL=1 ./run.sh
 ```
 
-Direct `./ielts.py` launches still work with Python 3.10+, and explain the
+Windows Command Prompt equivalents:
+
+```bat
+set IELTS_CODEX_PYTHON=C:\Path\To\python.exe
+run.bat
+set IELTS_CODEX_NO_AUTO_INSTALL=1
+run.bat
+```
+
+Direct `python ielts.py` launches still work with Python 3.10+, and explain the
 version requirement clearly when an older interpreter is used.
 
 You can also install the `ielts-codex` command:
 
 ```bash
 # Use any Python 3.10+ executable available on your system.
-python3.10 -m pip install .
+python -m pip install .
 ielts-codex
 ```
 

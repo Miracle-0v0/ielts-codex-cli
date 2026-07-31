@@ -9,8 +9,8 @@ if sys.version_info < (3, 10):
     found = ".".join(str(part) for part in sys.version_info[:3])
     print(
         "IELTS Codex requires Python 3.10 or later "
-        f"(found Python {found}). Run ./run.sh to locate or install "
-        "a compatible interpreter.",
+        f"(found Python {found}). Run run.bat on Windows or ./run.sh on "
+        "Linux and macOS to locate or install a compatible interpreter.",
         file=sys.stderr,
     )
     raise SystemExit(1)
