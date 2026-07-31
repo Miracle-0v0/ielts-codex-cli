@@ -1,10 +1,10 @@
 """ANSI pixel-art renderer for the pocket-adventure spelling game.
 
 The game engine continues to reason in map tiles. This module expands every
-logical tile into an 8 by 8 pixel canvas, then packs two vertical pixels into one
-terminal cell with the Unicode upper-half block (``▀``). The game view combines
-a 56-column local scene with a 20-column north-up minimap, so the complete
-viewport remains 77 columns by 16 terminal rows.
+logical tile into an 8 by 8 pixel canvas, then packs a 2 by 4 micro-pixel group
+into one Unicode Braille cell. The game view combines a 56-column local scene
+with a 20-column north-up minimap, so the complete viewport remains 77 columns
+by 16 terminal rows while showing substantially more of the field.
 
 The renderer is deliberately stateless and has no third-party dependencies. It
 uses an original grassland, tree-canopy, path, and creature palette inspired by
@@ -22,14 +22,16 @@ Its public entry points are:
     animated pixel-sprite data.
 
 Callers may supply :class:`PetSpriteData` directly when an API or a future
-sprite editor provides custom pixel art.  ANSI-free output uses block shading
-so the map and silhouettes remain legible in redirected or monochrome output.
+sprite editor provides custom pixel art. ANSI-free output uses Braille and block
+shading so the map and silhouettes remain legible in redirected or monochrome
+output.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import AbstractSet, Final
 
 from .game_engine import GameEngine, GameSnapshot, Position, Tile
@@ -38,16 +40,21 @@ from .pet_api import DEFAULT_PET_PALETTE, DEFAULT_PET_SPRITE, PetProfile
 
 TILE_PIXEL_WIDTH: Final = 8
 TILE_PIXEL_HEIGHT: Final = 8
-# Seven detailed tiles keep the local field at exactly 56 terminal columns;
-# four tiles high leave room for the command HUD in a regular 80-by-24 shell.
-VIEWPORT_TILE_WIDTH: Final = 7
-VIEWPORT_TILE_HEIGHT: Final = 4
+# Micro-pixel Braille cells encode two horizontal by four vertical artwork
+# pixels. The 8-by-8 art remains intact while each pixel appears smaller.
+MICRO_PIXEL_WIDTH: Final = 2
+MICRO_PIXEL_HEIGHT: Final = 4
+# Fourteen detailed tiles keep the local field at exactly 56 terminal columns;
+# eight tiles high retain the 16-row map slot beneath the HUD in an 80-by-24
+# shell. This is a two-times wider and taller map view than the full-block mode.
+VIEWPORT_TILE_WIDTH: Final = 14
+VIEWPORT_TILE_HEIGHT: Final = 8
 SCENE_TILE_WIDTH: Final = VIEWPORT_TILE_WIDTH
-SCENE_COLUMNS: Final = TILE_PIXEL_WIDTH * VIEWPORT_TILE_WIDTH
+SCENE_COLUMNS: Final = TILE_PIXEL_WIDTH * VIEWPORT_TILE_WIDTH // MICRO_PIXEL_WIDTH
 MINIMAP_COLUMNS: Final = 20
 MINIMAP_MAP_ROWS: Final = 10
 VIEWPORT_COLUMNS: Final = SCENE_COLUMNS + 1 + MINIMAP_COLUMNS
-VIEWPORT_ROWS: Final = TILE_PIXEL_HEIGHT * VIEWPORT_TILE_HEIGHT // 2
+VIEWPORT_ROWS: Final = TILE_PIXEL_HEIGHT * VIEWPORT_TILE_HEIGHT // MICRO_PIXEL_HEIGHT
 ANSI_RESET: Final = "\x1b[0m"
 
 _TRANSPARENT: Final = "."
@@ -102,20 +109,26 @@ class PixelViewport:
     def __post_init__(self) -> None:
         if self.width_tiles <= 0 or self.height_tiles <= 0:
             raise ValueError("Pixel viewport dimensions must be positive.")
-        if self.height_tiles * TILE_PIXEL_HEIGHT % 2:
-            raise ValueError("Pixel viewport height must contain an even pixel count.")
+        if self.width_tiles * TILE_PIXEL_WIDTH % MICRO_PIXEL_WIDTH:
+            raise ValueError(
+                "Pixel viewport width must contain complete micro-pixel cells."
+            )
+        if self.height_tiles * TILE_PIXEL_HEIGHT % MICRO_PIXEL_HEIGHT:
+            raise ValueError(
+                "Pixel viewport height must contain complete micro-pixel cells."
+            )
 
     @property
     def columns(self) -> int:
         """Return the terminal-cell width of this viewport."""
 
-        return self.width_tiles * TILE_PIXEL_WIDTH
+        return self.width_tiles * TILE_PIXEL_WIDTH // MICRO_PIXEL_WIDTH
 
     @property
     def rows(self) -> int:
         """Return the packed terminal-row height of this viewport."""
 
-        return self.height_tiles * TILE_PIXEL_HEIGHT // 2
+        return self.height_tiles * TILE_PIXEL_HEIGHT // MICRO_PIXEL_HEIGHT
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,8 +224,8 @@ class PixelArtRenderer:
             tick if player_frame is None else int(player_frame),
         )
         if self.colour:
-            return _pack_ansi(canvas)
-        return _pack_monochrome(canvas, pet_pixels)
+            return _pack_micro_ansi(canvas)
+        return _pack_micro_monochrome(canvas, pet_pixels)
 
 
 def camera_origin(
@@ -300,9 +313,9 @@ def render_pet_preview(
                 canvas[y][x] = sprite.palette[symbol]
                 pet_pixels.add((x, y))
     return (
-        _pack_ansi(canvas)
+        _pack_full_ansi(canvas)
         if colour
-        else _pack_monochrome(canvas, pet_pixels)
+        else _pack_full_monochrome(canvas, pet_pixels)
     )
 
 
@@ -821,7 +834,53 @@ def _blit_pixels(
         ] = row
 
 
-def _pack_ansi(canvas: Sequence[Sequence[int]]) -> list[str]:
+_BRAILLE_OFFSET: Final = 0x2800
+_BRAILLE_BITS: Final[tuple[tuple[int, int], ...]] = (
+    (0x01, 0x08),
+    (0x02, 0x10),
+    (0x04, 0x20),
+    (0x40, 0x80),
+)
+
+
+def _pack_micro_ansi(canvas: Sequence[Sequence[int]]) -> list[str]:
+    """Pack 2-by-4 artwork pixels into each coloured Unicode Braille cell.
+
+    A terminal cell carries one foreground and one background colour. For a
+    micro-cell containing more than two source colours, choose the two that
+    best approximate the group in xterm RGB space. This keeps the source 8-by-8
+    art intact while reducing each visible pixel's footprint enough to show a
+    much wider field.
+    """
+
+    _validate_micro_canvas(canvas)
+    lines: list[str] = []
+    for y in range(0, len(canvas), MICRO_PIXEL_HEIGHT):
+        pieces: list[str] = []
+        previous: tuple[int, int] | None = None
+        for x in range(0, len(canvas[y]), MICRO_PIXEL_WIDTH):
+            colours = tuple(
+                canvas[y + offset_y][x + offset_x]
+                for offset_y in range(MICRO_PIXEL_HEIGHT)
+                for offset_x in range(MICRO_PIXEL_WIDTH)
+            )
+            foreground, background = _micro_cell_colours(colours)
+            mask = _micro_braille_mask(colours, foreground, background)
+            pair = (foreground, background)
+            if pair != previous:
+                pieces.append(
+                    f"\x1b[38;5;{foreground};48;5;{background}m"
+                )
+                previous = pair
+            pieces.append(chr(_BRAILLE_OFFSET + mask))
+        pieces.append(ANSI_RESET)
+        lines.append("".join(pieces))
+    return lines
+
+
+def _pack_full_ansi(canvas: Sequence[Sequence[int]]) -> list[str]:
+    """Pack vertical pairs at full size for the companion-preview panel."""
+
     lines: list[str] = []
     for y in range(0, len(canvas), 2):
         upper = canvas[y]
@@ -839,6 +898,120 @@ def _pack_ansi(canvas: Sequence[Sequence[int]]) -> list[str]:
         pieces.append(ANSI_RESET)
         lines.append("".join(pieces))
     return lines
+
+
+def _validate_micro_canvas(canvas: Sequence[Sequence[int]]) -> None:
+    if not canvas:
+        return
+    width = len(canvas[0])
+    if (
+        len(canvas) % MICRO_PIXEL_HEIGHT
+        or width % MICRO_PIXEL_WIDTH
+        or any(len(row) != width for row in canvas)
+    ):
+        raise ValueError("Micro-pixel canvas dimensions must divide into 2-by-4 cells.")
+
+
+def _micro_cell_colours(colours: tuple[int, ...]) -> tuple[int, int]:
+    """Return foreground/background ANSI colours with minimum RGB error."""
+
+    unique = tuple(dict.fromkeys(colours))
+    if len(unique) == 1:
+        return unique[0], unique[0]
+    counts = {colour: colours.count(colour) for colour in unique}
+    selected: tuple[int, int] | None = None
+    selected_key: tuple[int, int, int, int, int] | None = None
+    for background in unique:
+        for foreground in unique:
+            error = sum(
+                min(
+                    _ansi_colour_distance(colour, background),
+                    _ansi_colour_distance(colour, foreground),
+                )
+                for colour in colours
+            )
+            key = (
+                error,
+                -counts[background],
+                -counts[foreground],
+                background,
+                foreground,
+            )
+            if selected_key is None or key < selected_key:
+                selected = (foreground, background)
+                selected_key = key
+    assert selected is not None
+    return selected
+
+
+def _micro_braille_mask(
+    colours: tuple[int, ...],
+    foreground: int,
+    background: int,
+) -> int:
+    """Return the Braille-dot mask for pixels assigned to foreground colour."""
+
+    mask = 0
+    for offset_y, bits in enumerate(_BRAILLE_BITS):
+        for offset_x, bit in enumerate(bits):
+            colour = colours[offset_y * MICRO_PIXEL_WIDTH + offset_x]
+            if _ansi_colour_distance(colour, foreground) < _ansi_colour_distance(
+                colour,
+                background,
+            ):
+                mask |= bit
+    return mask
+
+
+@lru_cache(maxsize=256)
+def _ansi256_rgb(colour: int) -> tuple[int, int, int]:
+    """Return an ANSI 256-colour index as RGB for local micro-cell matching."""
+
+    ansi_base = (
+        (0, 0, 0),
+        (128, 0, 0),
+        (0, 128, 0),
+        (128, 128, 0),
+        (0, 0, 128),
+        (128, 0, 128),
+        (0, 128, 128),
+        (192, 192, 192),
+        (128, 128, 128),
+        (255, 0, 0),
+        (0, 255, 0),
+        (255, 255, 0),
+        (0, 0, 255),
+        (255, 0, 255),
+        (0, 255, 255),
+        (255, 255, 255),
+    )
+    if 0 <= colour < len(ansi_base):
+        return ansi_base[colour]
+    if 16 <= colour <= 231:
+        offset = colour - 16
+        cube = (0, 95, 135, 175, 215, 255)
+        return (
+            cube[offset // 36],
+            cube[(offset % 36) // 6],
+            cube[offset % 6],
+        )
+    if 232 <= colour <= 255:
+        gray = 8 + (colour - 232) * 10
+        return gray, gray, gray
+    return 0, 0, 0
+
+
+@lru_cache(maxsize=65_536)
+def _ansi_colour_distance(first: int, second: int) -> int:
+    """Return squared RGB distance between two ANSI palette entries."""
+
+    red_a, green_a, blue_a = _ansi256_rgb(first)
+    red_b, green_b, blue_b = _ansi256_rgb(second)
+    return (
+        (red_a - red_b) ** 2
+        + (green_a - green_b) ** 2
+        + (blue_a - blue_b) ** 2
+    )
 
 
 _MONO_LIT: Final[frozenset[int]] = frozenset(
@@ -875,7 +1048,43 @@ _MONO_LIT: Final[frozenset[int]] = frozenset(
 )
 
 
-def _pack_monochrome(
+def _pack_micro_monochrome(
+    canvas: Sequence[Sequence[int]],
+    forced_lit: AbstractSet[tuple[int, int]] = frozenset(),
+) -> list[str]:
+    """Render micro-pixel shapes without ANSI colour support."""
+
+    _validate_micro_canvas(canvas)
+    lines: list[str] = []
+    for y in range(0, len(canvas), MICRO_PIXEL_HEIGHT):
+        row: list[str] = []
+        for x in range(0, len(canvas[y]), MICRO_PIXEL_WIDTH):
+            mask = 0
+            colours: list[int] = []
+            for offset_y, bits in enumerate(_BRAILLE_BITS):
+                for offset_x, bit in enumerate(bits):
+                    colour = canvas[y + offset_y][x + offset_x]
+                    colours.append(colour)
+                    pixel = (x + offset_x, y + offset_y)
+                    if pixel in forced_lit or (
+                        colour in _MONO_LIT and colour not in {_FOG, _VOID}
+                    ):
+                        mask |= bit
+            if mask:
+                row.append(chr(_BRAILLE_OFFSET + mask))
+            elif any(colour in {_FOG, _FOG_WISP} for colour in colours):
+                row.append("░")
+            elif any(colour in {_EXPLORED, _EXPLORED_MARK} for colour in colours):
+                row.append("·")
+            elif any(colour in {_WALL, _WALL_DARK} for colour in colours):
+                row.append("▓")
+            else:
+                row.append(" ")
+        lines.append("".join(row))
+    return lines
+
+
+def _pack_full_monochrome(
     canvas: Sequence[Sequence[int]],
     forced_lit: AbstractSet[tuple[int, int]] = frozenset(),
 ) -> list[str]:
@@ -987,6 +1196,8 @@ __all__ = [
     "PetSpriteData",
     "PixelArtRenderer",
     "PixelViewport",
+    "MICRO_PIXEL_HEIGHT",
+    "MICRO_PIXEL_WIDTH",
     "MINIMAP_COLUMNS",
     "SCENE_COLUMNS",
     "TILE_PIXEL_HEIGHT",

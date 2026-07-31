@@ -17,7 +17,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Refined the original pocket-adventure field from 7-by-6 into more detailed
   8-by-8 pixel art: layered grass, flower clusters, pebble paths, textured tree
   canopies, a fuller trainer, companion, and animated letter-creature sprites.
-- Kept the 80-by-24 layout by using a 7-by-4 field camera beside the field map.
+- Repacked artwork into 2-by-4 micro-pixel Braille cells, expanding the field
+  camera from 7-by-4 to 14-by-8 tiles while keeping the same 80-by-24 layout.
 - Preserved custom companion saves from the earlier 7-by-6 sprite format by
   padding them into the new rendering canvas; newly generated pets use 8-by-8.
 

@@ -1525,7 +1525,7 @@ def _probe_half_block_width(
     *,
     timeout: float = CPR_TIMEOUT_SECONDS,
 ) -> bool:
-    """Return whether ``A▀`` advances a POSIX terminal to column three."""
+    """Return whether the micro-pixel Braille glyph is one terminal cell wide."""
 
     if os.name != "posix":
         return True
@@ -1542,7 +1542,7 @@ def _probe_half_block_width(
     try:
         tty.setcbreak(input_fd)
         entered_screen = True
-        output_stream.write("\033[?1049h\033[2J\033[HA▀\033[6n")
+        output_stream.write("\033[?1049h\033[2J\033[HA⣿\033[6n")
         output_stream.flush()
         position = _read_cursor_position(input_fd, timeout=timeout)
         return position == (1, 3)

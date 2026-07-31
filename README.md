@@ -129,13 +129,14 @@ handheld monster-adventure-style terminal game:
 › /game 3 environment
 ```
 
-On an interactive terminal, a 7-by-4-tile camera renders each map tile as an
+On an interactive terminal, a 14-by-8-tile camera renders each map tile as an
 8-by-8 pixel scene: layered grass blades, flower clusters, pebble paths, tree
 canopies, a full capped-trainer sprite, a complete companion, and animated
 letter creatures. A compact field map, party-style HUD, spell meter, and
 dialogue box retain the feeling of an original handheld monster adventure. The
-renderer packs two vertical pixels into each terminal cell, allowing the scene,
-minimap, and HUD to fit an 80-by-24 terminal.
+renderer packs a 2-by-4 group of artwork pixels into one Unicode Braille cell,
+so each visible pixel is smaller while the detailed art, scene, minimap, and
+HUD still fit an 80-by-24 terminal.
 
 Move with `WASD` or the arrow keys and walk into letter monsters in the exact
 spelling order. A wrong monster costs hunger. Only a small circular pool around
@@ -160,13 +161,13 @@ records `Again`.
 
 Interactive terminals use a smooth alternate-screen animation that redraws
 only changed rows and caps display output at 10 frames per second, even while a
-key is held down. On POSIX terminals, IELTS Codex measures the pixel block's
-actual cell width before starting: profiles that render ambiguous Unicode
-characters as double-width, or do not answer the width probe, automatically
-use the text-only turn-based fallback. Non-TTY input and `TERM=dumb` use the
-same fallback so redirected or assistive input is not punished by wall-clock
-time. A pixel session requires at least 80 columns and 24 rows. Resizing below
-that limit pauses the game clock until the window is restored.
+key is held down. On POSIX terminals, IELTS Codex measures the micro-pixel
+Braille glyph's cell width before starting: profiles that render it as
+double-width, or do not answer the width probe, automatically use the text-only
+turn-based fallback. Non-TTY input and `TERM=dumb` use the same fallback so
+redirected or assistive input is not punished by wall-clock time. A pixel
+session requires at least 80 columns and 24 rows. Resizing below that limit
+pauses the game clock until the window is restored.
 
 ### Original BGM
 

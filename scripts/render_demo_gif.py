@@ -41,6 +41,7 @@ DEFAULT_OUTPUT = REPO_ROOT / "docs" / "demo.gif"
 COLS = 94
 ROWS = 27
 FONT_SIZE = 18
+BRAILLE_FONT_SIZE = 13
 CELL_WIDTH = 9
 LINE_HEIGHT = 24
 SIDE_MARGIN = 24
@@ -78,6 +79,7 @@ class Style:
     color: tuple[int, int, int] = DEFAULT_FOREGROUND
     bold: bool = False
     dim: bool = False
+    background: tuple[int, int, int] | None = None
 
 
 @dataclass(slots=True)
@@ -223,22 +225,53 @@ class MiniTerminal:
             if value == 0:
                 self.style = Style()
             elif value == 1:
-                self.style = Style(self.style.color, True, self.style.dim)
+                self.style = Style(
+                    self.style.color,
+                    True,
+                    self.style.dim,
+                    self.style.background,
+                )
             elif value == 2:
-                self.style = Style(self.style.color, self.style.bold, True)
+                self.style = Style(
+                    self.style.color,
+                    self.style.bold,
+                    True,
+                    self.style.background,
+                )
             elif value == 22:
-                self.style = Style(self.style.color, False, False)
+                self.style = Style(
+                    self.style.color,
+                    False,
+                    False,
+                    self.style.background,
+                )
             elif value == 39:
                 self.style = Style(
-                    DEFAULT_FOREGROUND, self.style.bold, self.style.dim
+                    DEFAULT_FOREGROUND,
+                    self.style.bold,
+                    self.style.dim,
+                    self.style.background,
+                )
+            elif value == 49:
+                self.style = Style(
+                    self.style.color,
+                    self.style.bold,
+                    self.style.dim,
+                    None,
                 )
             elif 30 <= value <= 37:
                 self.style = Style(
-                    ANSI_BASE[value - 30], self.style.bold, self.style.dim
+                    ANSI_BASE[value - 30],
+                    self.style.bold,
+                    self.style.dim,
+                    self.style.background,
                 )
             elif 90 <= value <= 97:
                 self.style = Style(
-                    ANSI_BASE[value - 90 + 8], self.style.bold, self.style.dim
+                    ANSI_BASE[value - 90 + 8],
+                    self.style.bold,
+                    self.style.dim,
+                    self.style.background,
                 )
             elif (
                 value == 38
@@ -249,6 +282,19 @@ class MiniTerminal:
                     _xterm_color(values[index + 2]),
                     self.style.bold,
                     self.style.dim,
+                    self.style.background,
+                )
+                index += 2
+            elif (
+                value == 48
+                and index + 2 < len(values)
+                and values[index + 1] == 5
+            ):
+                self.style = Style(
+                    self.style.color,
+                    self.style.bold,
+                    self.style.dim,
+                    _xterm_color(values[index + 2]),
                 )
                 index += 2
             index += 1
@@ -293,11 +339,21 @@ def _font_from_fontconfig(family: str) -> Path | None:
 
 def _find_fonts(
     font_override: Path | None,
-) -> tuple[Path, Path, int, Path, Path]:
+) -> tuple[Path, Path, int, Path, Path, Path]:
     if font_override:
         if not font_override.is_file():
             raise SystemExit(f"Font does not exist: {font_override}")
-        return font_override, font_override, 0, font_override, font_override
+        symbols = Path(
+            "/usr/share/fonts/truetype/noto/NotoSansSymbols2-Regular.ttf"
+        )
+        return (
+            font_override,
+            font_override,
+            0,
+            font_override,
+            font_override,
+            symbols if symbols.is_file() else font_override,
+        )
 
     regular = Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc")
     bold = Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc")
@@ -309,6 +365,9 @@ def _find_fonts(
     latin_bold = Path(
         "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf"
     )
+    braille = Path("/usr/share/fonts/truetype/noto/NotoSansSymbols2-Regular.ttf")
+    if not braille.is_file():
+        braille = latin_regular
     if regular.is_file():
         if not latin_regular.is_file():
             latin_regular = regular
@@ -319,11 +378,12 @@ def _find_fonts(
             7,
             latin_regular,
             latin_bold if latin_bold.is_file() else latin_regular,
+            braille,
         )
 
     matched = _font_from_fontconfig("Noto Sans Mono CJK SC")
     if matched:
-        return matched, matched, 0, matched, matched
+        return matched, matched, 0, matched, matched, braille
     raise SystemExit(
         "A CJK monospace font is required. Install Noto Sans Mono CJK "
         "or pass --font PATH."
@@ -345,6 +405,7 @@ def _render_frame(
     cjk_bold_font: ImageFont.FreeTypeFont,
     latin_regular_font: ImageFont.FreeTypeFont,
     latin_bold_font: ImageFont.FreeTypeFont,
+    braille_font: ImageFont.FreeTypeFont,
 ) -> Image.Image:
     width = SIDE_MARGIN * 2 + COLS * CELL_WIDTH
     height = TITLE_HEIGHT + ROWS * LINE_HEIGHT + CAPTION_HEIGHT
@@ -373,16 +434,25 @@ def _render_frame(
     for row_index, row in enumerate(terminal.cells):
         y = TITLE_HEIGHT + row_index * LINE_HEIGHT
         for column, cell in enumerate(row):
+            x = SIDE_MARGIN + column * CELL_WIDTH
+            if cell.style.background is not None:
+                draw.rectangle(
+                    (x, y, x + CELL_WIDTH - 1, y + LINE_HEIGHT - 1),
+                    fill=cell.style.background,
+                )
             if not cell.char or cell.char == " ":
                 continue
             color = _dim(cell.style.color) if cell.style.dim else cell.style.color
             is_wide = _display_width(cell.char[0]) == 2
-            if is_wide:
+            is_braille = "\u2800" <= cell.char[0] <= "\u28ff"
+            if is_braille:
+                font = braille_font
+            elif is_wide:
                 font = cjk_bold_font if cell.style.bold else cjk_regular_font
             else:
                 font = latin_bold_font if cell.style.bold else latin_regular_font
             draw.text(
-                (SIDE_MARGIN + column * CELL_WIDTH, y),
+                (x, y),
                 cell.char,
                 font=font,
                 fill=color,
@@ -425,7 +495,35 @@ def _render_frame(
 def _build_palette() -> Image.Image:
     """Build one deterministic palette for compact delta-encoded frames."""
 
-    terminal_colors = (
+    field_codes = (
+        16,
+        17,
+        22,
+        24,
+        27,
+        28,
+        34,
+        39,
+        52,
+        54,
+        60,
+        67,
+        70,
+        77,
+        94,
+        99,
+        147,
+        173,
+        179,
+        196,
+        203,
+        213,
+        221,
+        223,
+        231,
+        236,
+    )
+    ui_colors = (
         DEFAULT_FOREGROUND,
         _xterm_color(80),
         _xterm_color(114),
@@ -435,7 +533,18 @@ def _build_palette() -> Image.Image:
         _xterm_color(183),
         _xterm_color(245),
     )
-    pairs = [(color, BACKGROUND) for color in terminal_colors]
+    terminal_colors = tuple(
+        dict.fromkeys(
+            (
+                *ui_colors,
+                *(_xterm_color(code) for code in field_codes),
+            )
+        )
+    )
+    # Field cells carry their own coloured backgrounds. Keep their solid RGB
+    # values in the palette, while reserving anti-aliased blend ramps for text
+    # and chrome so the deterministic GIF remains within the 256-colour limit.
+    pairs = [(color, BACKGROUND) for color in ui_colors]
     pairs.extend(
         (
             ((210, 214, 220), (31, 35, 41)),
@@ -452,6 +561,9 @@ def _build_palette() -> Image.Image:
         (31, 35, 41),
         (48, 54, 61),
     ]
+    for color in terminal_colors:
+        if color not in colors:
+            colors.append(color)
     for foreground, background in pairs:
         for step in range(1, 17):
             alpha = step / 16
@@ -497,12 +609,14 @@ class Animation:
         cjk_bold_font: ImageFont.FreeTypeFont,
         latin_regular_font: ImageFont.FreeTypeFont,
         latin_bold_font: ImageFont.FreeTypeFont,
+        braille_font: ImageFont.FreeTypeFont,
     ) -> None:
         self.terminal = terminal
         self.cjk_regular_font = cjk_regular_font
         self.cjk_bold_font = cjk_bold_font
         self.latin_regular_font = latin_regular_font
         self.latin_bold_font = latin_bold_font
+        self.braille_font = braille_font
         self.palette = _build_palette()
         self.frames: list[Image.Image] = []
         self.durations: list[int] = []
@@ -517,6 +631,7 @@ class Animation:
             self.cjk_bold_font,
             self.latin_regular_font,
             self.latin_bold_font,
+            self.braille_font,
         )
         self.frames.append(
             rendered.quantize(palette=self.palette, dither=Image.Dither.NONE)
@@ -644,6 +759,7 @@ def _record_session(
     cjk_bold_font: ImageFont.FreeTypeFont,
     latin_regular_font: ImageFont.FreeTypeFont,
     latin_bold_font: ImageFont.FreeTypeFont,
+    braille_font: ImageFont.FreeTypeFont,
 ) -> tuple[list[Image.Image], list[int]]:
     terminal = MiniTerminal()
     animation = Animation(
@@ -652,6 +768,7 @@ def _record_session(
         cjk_bold_font,
         latin_regular_font,
         latin_bold_font,
+        braille_font,
     )
 
     with _demo_data_directory() as data_dir:
@@ -821,6 +938,7 @@ def main() -> int:
         font_index,
         latin_regular_path,
         latin_bold_path,
+        braille_path,
     ) = _find_fonts(args.font)
     cjk_regular_font = ImageFont.truetype(
         str(regular_path), FONT_SIZE, index=font_index
@@ -833,11 +951,13 @@ def main() -> int:
         str(latin_regular_path), latin_size
     )
     latin_bold_font = ImageFont.truetype(str(latin_bold_path), latin_size)
+    braille_font = ImageFont.truetype(str(braille_path), BRAILLE_FONT_SIZE)
     frames, durations = _record_session(
         cjk_regular_font,
         cjk_bold_font,
         latin_regular_font,
         latin_bold_font,
+        braille_font,
     )
     output = args.output.resolve()
     _save_gif(frames, durations, output)

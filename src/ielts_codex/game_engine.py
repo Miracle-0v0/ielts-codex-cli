@@ -748,19 +748,18 @@ class GameEngine:
         if len(candidates) < monster_count:
             raise ValueError("The map does not have enough monster positions.")
 
-        # Keep one monster in the opening pool of light and inside the compact
-        # field camera so the objective is immediately legible without opening
-        # the rest of the foggy map.  The asymmetric vertical range matches the
-        # player-centred, four-tile-high field framing: it leaves a little more
-        # ground in front of the trainer than behind them.
+        # Keep one monster in the opening pool of light and inside the wider
+        # micro-pixel field camera so the objective is immediately legible
+        # without opening the rest of the foggy map. The asymmetric vertical
+        # framing leaves a little more ground in front of the trainer.
         showcase = next(
             (
                 position
                 for position in candidates
                 if position in self.visible_positions
                 and position.manhattan_distance(self.player_position) > 1
-                and -3 <= position.x - self.player_position.x <= 3
-                and -2 <= position.y - self.player_position.y <= 1
+                and -7 <= position.x - self.player_position.x <= 6
+                and -4 <= position.y - self.player_position.y <= 3
             ),
             None,
         )
