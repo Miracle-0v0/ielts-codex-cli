@@ -3,4 +3,4 @@
 from .models import CardProgress, Rating, Word
 
 __all__ = ["CardProgress", "Rating", "Word"]
-__version__ = "0.5.1"
+__version__ = "0.6.0"

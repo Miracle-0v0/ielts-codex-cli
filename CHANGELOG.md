@@ -4,6 +4,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-31
+
 ### Added
 
 - Added an optional, locally synthesized original chiptune BGM for interactive
@@ -136,6 +138,7 @@ Initial public release.
 - Search across English words, Chinese meanings, and synonyms.
 - An MIT license and open-source contribution guide.
 
+[0.6.0]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.3.1...v0.5.0
 [0.3.1]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.3.0...v0.3.1
