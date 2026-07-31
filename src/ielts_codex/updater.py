@@ -69,6 +69,26 @@ ALLOWED_DOWNLOAD_HOSTS = {
     "release-assets.githubusercontent.com",
     "objects.githubusercontent.com",
 }
+RUNTIME_PACKAGE_PATHS = frozenset(
+    {
+        "ielts_codex/__init__.py",
+        "ielts_codex/__main__.py",
+        "ielts_codex/cli.py",
+        "ielts_codex/game_engine.py",
+        "ielts_codex/game_mode.py",
+        "ielts_codex/models.py",
+        "ielts_codex/oewn.py",
+        "ielts_codex/pet_api.py",
+        "ielts_codex/pixel_art.py",
+        "ielts_codex/scheduler.py",
+        "ielts_codex/storage.py",
+        "ielts_codex/ui.py",
+        "ielts_codex/updater.py",
+        "ielts_codex/word_bank.py",
+        "ielts_codex/data/__init__.py",
+        "ielts_codex/data/words.json",
+    }
+)
 
 
 class ProjectUpdateError(RuntimeError):
@@ -900,13 +920,12 @@ class ProjectUpdater:
         commit: str,
         expected_version: str,
     ) -> None:
-        for required_path in (
+        required_source_paths = {
             "ielts.py",
-            "src/ielts_codex/__init__.py",
-            "src/ielts_codex/cli.py",
-            "src/ielts_codex/updater.py",
-            "src/ielts_codex/data/words.json",
-        ):
+            "pyproject.toml",
+            *(f"src/{path}" for path in RUNTIME_PACKAGE_PATHS),
+        }
+        for required_path in sorted(required_source_paths):
             self._git_output(
                 root,
                 "cat-file",
@@ -1043,11 +1062,13 @@ class ProjectUpdater:
                     self.executable,
                     "-c",
                     (
-                        "import importlib.metadata as m,json,ielts_codex;"
+                        "import importlib.metadata as m,json,ielts_codex,"
+                        "ielts_codex.cli as c;"
                         f"print({marker!r}+json.dumps({{"
                         "'metadata':m.version('ielts-codex'),"
                         "'package':ielts_codex.__version__,"
-                        "'module':ielts_codex.__file__"
+                        "'module':ielts_codex.__file__,"
+                        "'cli':c.__file__"
                         "}))"
                     ),
                 ],
@@ -1063,6 +1084,7 @@ class ProjectUpdater:
                 )
                 verified = json.loads(payload)
                 verified_module = Path(verified["module"]).resolve()
+                verified_cli = Path(verified["cli"]).resolve()
             except (
                 json.JSONDecodeError,
                 KeyError,
@@ -1073,12 +1095,15 @@ class ProjectUpdater:
             ):
                 verified = {}
                 verified_module = Path()
+                verified_cli = Path()
             expected_init = self.module_file.parent / "__init__.py"
+            expected_cli = self.module_file.parent / "cli.py"
             if (
                 verification.returncode != 0
                 or verified.get("metadata") != release.version
                 or verified.get("package") != release.version
                 or verified_module != expected_init
+                or verified_cli != expected_cli
                 or self._version_from_init(expected_init) != release.version
             ):
                 raise ProjectUpdateError(
@@ -1343,9 +1368,7 @@ class ProjectUpdater:
                     wheel_name,
                     record_name,
                     entry_points_name,
-                    "ielts_codex/__init__.py",
-                    "ielts_codex/cli.py",
-                    "ielts_codex/updater.py",
+                    *RUNTIME_PACKAGE_PATHS,
                 }
                 if not required.issubset(archive_names):
                     raise ProjectUpdateError(

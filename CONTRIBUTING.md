@@ -40,7 +40,7 @@ artifacts, or credentials.
 
 The project follows Semantic Versioning. Iterative visual, interaction,
 animation, compatibility, and other small improvements to an existing feature
-use patch releases, such as `0.3.0` to `0.3.1`. New commands or substantial new
+use patch releases, such as `0.5.0` to `0.5.1`. New commands or substantial new
 capabilities use a minor release; incompatible changes require a major release.
 
 ## Reporting issues

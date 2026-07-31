@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Sequence
 
 from . import __version__
+from .game_mode import GAME_DEFAULT_COUNT, GAME_MAX_COUNT, GameMode
 from .models import Rating, Word
 from .oewn import OEWNSyncError, OEWNSynchronizer, load_overlay
 from .storage import ProgressFileError, ProgressStore
@@ -38,6 +39,7 @@ SLASH_COMMANDS = (
     ("/learn", "学习未见单词"),
     ("/review", "复习到期卡片"),
     ("/quiz", "中文到英文拼写"),
+    ("/game", "局部灯光迷雾远征"),
     ("/search", "查询单词或释义"),
     ("/words", "浏览词表"),
     ("/topics", "查看主题"),
@@ -77,13 +79,15 @@ class IELTSApp:
         self.synchronizer = synchronizer or OEWNSynchronizer()
         self.project_updater = project_updater or ProjectUpdater()
         self._restart_required_version: str | None = None
+        self.game_mode = GameMode(bank, store, ui, rng=self.rng)
         self.running = True
 
     def run(self) -> int:
         self.ui.banner()
         self.show_today(compact=True)
         self.ui.hint(
-            "  输入 /learn 开始，/update 手动联网更新，/help 查看命令。"
+            "  输入 /learn 学习，/game 远征，/update 手动联网更新；"
+            "/help 查看命令。"
         )
         self.ui.write()
 
@@ -121,6 +125,7 @@ class IELTSApp:
             "l": "learn",
             "r": "review",
             "q": "quiz",
+            "g": "game",
             "s": "stats",
             "find": "search",
             "?": "help",
@@ -139,9 +144,10 @@ class IELTSApp:
             "today": self._command_today,
             "goal": self._command_goal,
             "update": self._command_update,
-            # Kept for scripts written before 0.3.2; intentionally omitted
+            # Kept for scripts written before /update; intentionally omitted
             # from the slash palette and help.
             "sync": self._command_sync,
+            "game": self._command_game,
             "help": self._command_help,
             "clear": self._command_clear,
             "quit": self._command_quit,
@@ -207,6 +213,8 @@ class IELTSApp:
             else:
                 self.ui.error("用法：ielts-codex sync [status] [--force] [--dry-run]")
                 return 2
+        elif command == "game":
+            self.game_mode.run(count, topic)
         return 0
 
     def _command_learn(self, args: list[str]) -> None:
@@ -284,6 +292,43 @@ class IELTSApp:
             force="--force" in args,
             dry_run="--dry-run" in args,
         )
+
+    def _command_game(self, args: list[str]) -> None:
+        if not args:
+            self.game_mode.run()
+            return
+        action = args[0].lower()
+        if action in {"help", "?"}:
+            self.game_mode.show_help()
+            return
+        if action in {"providers", "provider", "apis"}:
+            self.game_mode.show_providers()
+            return
+        if action in {"code", "secret"}:
+            code = "".join(args[1:]) if len(args) > 1 else None
+            self.game_mode.enter_secret_code(code)
+            return
+        if action == "pet":
+            if len(args) == 2 and args[1].lower() == "status":
+                self.game_mode.show_pet_status()
+                return
+            if len(args) >= 3 and args[1].lower() == "create":
+                self.game_mode.create_pet(" ".join(args[2:]))
+                return
+            if len(args) >= 2 and args[1].lower() not in {"create", "status"}:
+                self.game_mode.create_pet(" ".join(args[1:]))
+                return
+            self.ui.warning("用法：/game pet create <图片路径>  或  /game pet status")
+            return
+
+        parsed = self._parse_session_args(
+            args,
+            default_count=GAME_DEFAULT_COUNT,
+            maximum=GAME_MAX_COUNT,
+            example="/game 3 environment",
+        )
+        if parsed:
+            self.game_mode.run(*parsed)
 
     def _command_help(self, _args: list[str]) -> None:
         self.show_help()
@@ -478,6 +523,7 @@ class IELTSApp:
 
         try:
             self.bank = WordBank.bundled(self.store.oewn_overlay_path)
+            self.game_mode.bank = self.bank
         except (OEWNSyncError, OSError, ValueError) as exc:
             self.ui.error(f"更新已下载，但本地覆盖无法载入：{exc}")
             return False
@@ -520,9 +566,14 @@ class IELTSApp:
         )
 
     def _parse_session_args(
-        self, args: list[str]
+        self,
+        args: list[str],
+        *,
+        default_count: int = DEFAULT_SESSION_SIZE,
+        maximum: int = 100,
+        example: str = "/learn 10 environment",
     ) -> tuple[int, str | None] | None:
-        count = DEFAULT_SESSION_SIZE
+        count = default_count
         topic: str | None = None
         for arg in args:
             if arg.isdigit():
@@ -530,10 +581,10 @@ class IELTSApp:
             elif topic is None:
                 topic = self._normalize_topic(arg)
             else:
-                self.ui.error("参数过多。示例：/learn 10 environment")
+                self.ui.error(f"参数过多。示例：{example}")
                 return None
-        if not 1 <= count <= 100:
-            self.ui.error("每组数量须在 1 到 100 之间。")
+        if not 1 <= count <= maximum:
+            self.ui.error(f"每组数量须在 1 到 {maximum} 之间。")
             return None
         if topic and topic not in self.bank.topics:
             self._unknown_topic(topic)
@@ -883,6 +934,9 @@ class IELTSApp:
                 "/stats                  查看累计学习数据",
                 "/goal <数量>            修改每日目标",
                 "/update [status]         更新知识库与 GitHub stable 程序版本",
+                "/game [数量] [主题]       局部灯光与迷雾中的拼写远征",
+                "/game pet create <图片>  用自己的视觉 API 创建宠物",
+                "/game code [神秘代码]    输入游戏神秘代码",
                 "/clear                  清屏",
                 "/quit                   保存并退出",
                 "",
@@ -904,7 +958,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="?",
         metavar="command",
         help=(
-            "直接执行 learn/review/quiz/search/stats/topics/today/update；"
+            "直接执行 learn/review/quiz/game/search/stats/topics/today/update；"
             "省略则进入交互模式"
         ),
     )
@@ -913,7 +967,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="?",
         help="search 的查询内容，或 update 的 status",
     )
-    parser.add_argument("-n", "--count", type=int, default=DEFAULT_SESSION_SIZE)
+    parser.add_argument("-n", "--count", type=int)
     parser.add_argument("-t", "--topic", help="限定 IELTS 主题")
     parser.add_argument(
         "--data-dir",
@@ -955,14 +1009,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         "today",
         "topics",
         "search",
+        "game",
         "update",
-        # Backward-compatible but intentionally absent from --help.
+        # Backward-compatible but intentionally absent from user-facing help.
         "sync",
     }
     if args.command is not None and args.command not in direct_commands:
         parser.error(f"未知命令：{args.command}")
-    if not 1 <= args.count <= 100:
-        parser.error("--count 须在 1 到 100 之间")
+    default_count = (
+        GAME_DEFAULT_COUNT if args.command == "game" else DEFAULT_SESSION_SIZE
+    )
+    count = args.count if args.count is not None else default_count
+    maximum = GAME_MAX_COUNT if args.command == "game" else 100
+    if not 1 <= count <= maximum:
+        parser.error(f"--count 须在 1 到 {maximum} 之间")
     if (args.force or args.dry_run) and args.command not in {"update", "sync"}:
         parser.error("--force 和 --dry-run 仅适用于 update 命令")
     topic = IELTSApp._normalize_topic(args.topic) if args.topic else None
@@ -1000,7 +1060,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command:
             return app.execute_direct(
                 args.command,
-                count=args.count,
+                count=count,
                 topic=topic,
                 query=args.query,
                 force=args.force,

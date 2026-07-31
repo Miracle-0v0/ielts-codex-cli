@@ -35,6 +35,8 @@ learning interface is Chinese-first.
 - English, Chinese, and synonym search
 - Manual Open English WordNet 2025 English-definition updates
 - Safe checks for newer stable releases from the official GitHub repository
+- Pixel-art spelling game with complete animated characters
+- Optional image-inspired pet creation through a bring-your-own-key vision API
 - Zero runtime dependencies
 
 ## Quick start
@@ -68,6 +70,11 @@ ielts-codex
 | `/stats` | Show coverage, accuracy, streak, and mastery |
 | `/goal <count>` | Change the daily review goal |
 | `/update [status] [--force] [--dry-run]` | Update OEWN definitions and IELTS Codex |
+| `/game [count] [topic]` | Start a pixel-art spelling expedition |
+| `/game pet create <image>` | Create a companion with a user-configured vision API |
+| `/game pet status` | Inspect the locally saved companion metadata |
+| `/game providers` | Show supported API provider profiles |
+| `/game code [code]` | Enter or manage a session-only mystery code |
 | `/clear` | Clear the terminal |
 | `/quit` | Save and exit |
 
@@ -110,6 +117,129 @@ The quiz shows a Chinese meaning and asks for the English spelling. A correct
 answer advances the card. A misspelling reveals the answer and schedules the
 card as `Again`. Use `h` for a hint, `s` to skip, or `q` to stop.
 
+## Pixel game mode
+
+Version 0.5.0 presents the survival expedition as a terminal pixel game:
+
+```text
+› /game
+› /game 3 environment
+```
+
+On an interactive terminal, an 8-by-5-tile camera shows complete 7-by-6
+logical-pixel sprites beside a persistent north-up minimap. The player has a
+full body, the built-in puppy has a head, body, legs, and tail, and every letter
+appears inside a complete animated monster. The renderer packs two vertical
+pixels into each terminal cell, allowing the scene, minimap, and HUD to fit an
+80-by-24 terminal.
+
+Move with `WASD` or the arrow keys and walk into letter monsters in the exact
+spelling order. A wrong monster costs hunger. Only a small circular pool around
+the player and companion is lit, walls block that light, and animated fog hides
+the rest of the map. The minimap remembers explored terrain without exposing
+unseen monsters or walls. Taking too long progresses through hunger, dizziness,
+and health loss; the companion follows behind and adds a second small light.
+
+The two help channels are intentionally separate:
+
+- `h` advances through learning hints: phonetics, a cloze example, synonyms,
+  and finally the next letter.
+- `g` asks the pet for a rough direction to the current target without
+  revealing the letter.
+
+Hints are drawn only from the existing curated word fields. The vision API does
+not invent definitions, etymologies, examples, or mnemonics. A successful round
+updates the same spaced-repetition card used by `/learn`, `/review`, and
+`/quiz`. Passive pet visibility is free. Requesting a learning hint or pet
+direction caps the result at `Hard`, while directly revealing the next letter
+records `Again`.
+
+Interactive terminals use a smooth alternate-screen animation that redraws
+only changed rows and caps display output at 10 frames per second, even while a
+key is held down. On POSIX terminals, IELTS Codex measures the pixel block's
+actual cell width before starting: profiles that render ambiguous Unicode
+characters as double-width, or do not answer the width probe, automatically
+use the text-only turn-based fallback. Non-TTY input and `TERM=dumb` use the
+same fallback so redirected or assistive input is not punished by wall-clock
+time. A pixel session requires at least 80 columns and 24 rows. Resizing below
+that limit pauses the game clock until the window is restored.
+
+Set `IELTS_CODEX_GAME_TURN_BASED=1` to choose the compatibility mode directly.
+`IELTS_CODEX_GAME_FORCE_PIXEL=1` skips only the POSIX character-width probe;
+TTY and minimum-size checks still apply.
+
+### Mystery codes
+
+Enter a code from the main interactive prompt:
+
+```text
+› /game code WhosYourDaddy
+```
+
+You may also put the code on the same line. `WhosYourDaddy` enables
+invincibility, while `ISeeDeadPeople` reveals the full map and removes the fog
+of war. These effects last only for the current IELTS Codex process and are
+never written to `game.json`.
+
+```text
+› /game code ISeeDeadPeople
+› /game code status
+› /game code reset
+```
+
+### Create a pet from an image
+
+The game includes a complete, animated offline puppy that follows the player
+and opens the fog by default. Creating a custom pet is optional and replaces
+that puppy's appearance using your own vision-model account and API key. The
+API returns a strictly validated three-colour 7-by-6 indexed pixel sprite; it
+cannot return terminal escape sequences or executable drawing instructions.
+Configure a provider before launching IELTS Codex:
+
+```bash
+export IELTS_CODEX_GAME_PROVIDER=kimi
+export IELTS_CODEX_GAME_MODEL='<vision-capable-model-id>'
+read -rsp 'API key: ' IELTS_CODEX_GAME_API_KEY
+export IELTS_CODEX_GAME_API_KEY
+ielts-codex
+```
+
+Then run:
+
+```text
+› /game pet create ./my-pet-photo.jpg
+```
+
+Supported provider profiles use OpenAI-compatible Chat Completions:
+
+| Provider value | Default request endpoint |
+| --- | --- |
+| `openai` | `https://api.openai.com/v1/chat/completions` |
+| `kimi` | `https://api.moonshot.ai/v1/chat/completions` |
+| `qwen` | `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions` |
+| `glm` | `https://open.bigmodel.cn/api/paas/v4/chat/completions` |
+| `custom` | Set `IELTS_CODEX_GAME_API_URL` |
+
+No model ID is hard-coded because available multimodal models change. Select a
+model that accepts image input. `IELTS_CODEX_GAME_API_URL` can also override a
+named profile, which is useful for a regional or workspace-specific Qwen
+endpoint and for compatible gateways.
+
+Before any upload, the CLI displays the provider, model, destination host,
+image type, and image size, then asks for explicit confirmation. The API key,
+raw image, Base64 payload, and original path are never written to the progress
+store, and redirects are refused so the request cannot silently change hosts.
+Only the validated pet profile, provider/model metadata, destination host,
+timestamp, and image SHA-256 digest are saved locally.
+
+The provider schemas and endpoints follow the official
+[OpenAI Chat Completions](https://platform.openai.com/docs/api-reference/chat),
+[Kimi Chat Completion](https://platform.kimi.ai/docs/api/chat),
+[Qwen OpenAI-compatible Chat](https://help.aliyun.com/en/model-studio/qwen-api-via-openai-chat-completions),
+and [GLM vision-model](https://docs.bigmodel.cn/cn/guide/models/free/glm-4.6v-flash)
+documentation. Provider charges and data policies belong to the selected
+service; IELTS Codex does not proxy the request.
+
 ## Non-interactive mode
 
 Commands can also be called directly from a shell:
@@ -122,6 +252,7 @@ python3 ielts.py learn -n 5 -t environment
 python3 ielts.py --no-color stats
 python3 ielts.py update
 python3 ielts.py update status
+python3 ielts.py game -n 3 -t environment
 ```
 
 ## Vocabulary data and provenance
@@ -265,6 +396,14 @@ Learning progress is stored by default at:
 
 Each rating is saved immediately using a temporary file followed by an atomic
 replacement. This reduces the chance of corruption after an unexpected exit.
+
+Game companion metadata is stored separately at:
+
+```text
+~/.ielts-codex/game.json
+```
+
+That file never contains an API key or image payload.
 
 Use `IELTS_CODEX_HOME` or `--data-dir` to choose another location:
 

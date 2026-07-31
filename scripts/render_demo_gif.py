@@ -96,6 +96,9 @@ class MiniTerminal:
         self.row = 0
         self.column = 0
         self.style = Style()
+        self._primary_state: (
+            tuple[list[list[Cell]], int, int, Style] | None
+        ) = None
 
     def _blank_row(self) -> list[Cell]:
         return [Cell() for _ in range(self.columns)]
@@ -158,6 +161,27 @@ class MiniTerminal:
             self.row = self.rows - 1
 
     def _control(self, parameters: str, final: str) -> None:
+        if parameters == "?1049" and final == "h":
+            if self._primary_state is None:
+                self._primary_state = (
+                    self.cells,
+                    self.row,
+                    self.column,
+                    self.style,
+                )
+            self.cells = self._blank_screen()
+            self.row = self.column = 0
+            return
+        if parameters == "?1049" and final == "l":
+            if self._primary_state is not None:
+                (
+                    self.cells,
+                    self.row,
+                    self.column,
+                    self.style,
+                ) = self._primary_state
+                self._primary_state = None
+            return
         values = [
             int(item) if item else 0
             for item in parameters.removeprefix("?").split(";")
@@ -336,7 +360,7 @@ def _render_frame(
         draw.ellipse((x - 6, 16, x + 6, 28), fill=color)
     draw.text(
         (width // 2, 22),
-        "ielts-codex 0.3.2  ·  real CLI session",
+        "ielts-codex 0.5.0  ·  real CLI session",
         font=latin_bold_font,
         fill=(210, 214, 220),
         anchor="mm",
@@ -647,6 +671,7 @@ def _record_session(
                 "COLUMNS": str(COLS),
                 "LINES": str(ROWS),
                 "PYTHONUNBUFFERED": "1",
+                "IELTS_CODEX_GAME_FORCE_PIXEL": "1",
             }
         )
         child = pexpect.spawn(
@@ -713,14 +738,31 @@ def _record_session(
         animation.output(stats_output, caption)
         animation.hold(caption, 7)
 
-        caption = "9 · Inspect application and OEWN status without networking"
+        caption = "9 · Enter a real pixel-art fog run with the built-in dog"
+        animation.type_command("/game 1 environment", caption)
+        child.sendline("/game 1 environment")
+        game_output = _read_expect(child, "WASD/方向键")
+        game_output += _read_expect(child, "q 退出")
+        animation.output(game_output, caption)
+        animation.hold(caption, 12)
+
+        caption = "10 · Leave the expedition safely and return to the CLI"
+        child.send("q")
+        quit_output = _read_expect(child, "任意其他键取消并继续。")
+        animation.output(quit_output, caption)
+        animation.hold(caption, 4)
+        child.send("q")
+        animation.output(_read_expect(child, "› "), caption)
+        animation.hold(caption, 5)
+
+        caption = "11 · Inspect application and OEWN status without networking"
         child.sendline("/update status")
         update_output = _read_expect(child, "联网")
         update_output += _read_expect(child, "› ")
         animation.output(update_output, caption)
         animation.hold(caption, 8)
 
-        caption = "10 · Quit — progress is saved locally"
+        caption = "12 · Quit — progress is saved locally"
         child.sendline("/quit")
         animation.output(_read_expect(child, pexpect.EOF), caption)
         animation.hold(caption, 8)
