@@ -8,5 +8,6 @@ build/
 .venv/
 /my-progress/
 /.ielts-codex/
+/.ielts-bootstrap/
 /oewn_overlay.json
 /tests/

@@ -2,12 +2,15 @@
 # Start IELTS Codex from a source checkout with Python 3.10 or later.
 #
 # The application has no runtime dependencies. This launcher finds a suitable
-# interpreter, or asks the system package manager to install one when possible.
+# interpreter or offers an isolated, project-local Python managed by Astral uv.
 
 set -euo pipefail
 
 readonly PROJECT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly MINIMUM_PYTHON="3.10"
+readonly MANAGED_PYTHON="3.12"
+readonly UV_INSTALL_VERSION="0.11.32"
+readonly BOOTSTRAP_ROOT="${IELTS_CODEX_BOOTSTRAP_DIR:-$PROJECT_ROOT/.ielts-bootstrap}"
 PYTHON_EXECUTABLE=""
 
 info() {
@@ -52,6 +55,20 @@ use_python_if_compatible() {
     return 0
 }
 
+find_project_managed_python() {
+    local candidate=""
+
+    for candidate in \
+        "$BOOTSTRAP_ROOT"/python/*/bin/"python${MANAGED_PYTHON}" \
+        "$BOOTSTRAP_ROOT"/python/*/bin/python; do
+        if [[ -x "$candidate" ]] && is_compatible_python "$candidate"; then
+            PYTHON_EXECUTABLE="$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
 find_python() {
     local candidate=""
 
@@ -67,66 +84,23 @@ find_python() {
             return 0
         fi
     done
+    if find_project_managed_python; then
+        return 0
+    fi
     return 1
 }
 
-run_privileged() {
-    if [[ "$(id -u)" -eq 0 ]]; then
-        "$@"
-        return
-    fi
-    if command -v sudo >/dev/null 2>&1; then
-        sudo "$@"
-        return
-    fi
-    die "Installing Python needs administrator access, but sudo is unavailable."
-}
-
-apt_package_available() {
-    local package="$1"
-
-    # apt-cache show accepts regular expressions. Its literal package-name list
-    # plus grep's fixed, whole-line match avoids regex fallback entirely.
-    apt-cache pkgnames | grep -Fqx -- "$package"
-}
-
-refresh_apt_cache() {
-    if ! run_privileged apt-get update; then
-        info "APT update reported an error from another configured repository; continuing with cached package metadata. Repair that repository before your next normal system update."
-    fi
-}
-
-install_supported_apt_python() {
-    local package=""
-
-    for package in python3.10 python3.11 python3.12 python3.13 python3.14; do
-        if apt_package_available "$package"; then
-            info "Installing ${package}..."
-            run_privileged apt-get install -y "$package"
-            return 0
-        fi
-    done
-    return 1
-}
-
-is_ubuntu() {
-    local distribution_id=""
-
-    if [[ -r /etc/os-release ]]; then
-        distribution_id="$(. /etc/os-release; printf '%s' "${ID:-}")"
-    fi
-    [[ "$distribution_id" == "ubuntu" ]]
-}
-
-confirm_deadsnakes_ppa() {
+confirm_managed_python() {
     local answer=""
 
     if [[ ! -t 0 ]]; then
-        info "Ubuntu's optional Python PPA needs an interactive confirmation."
+        info "The managed Python fallback needs an interactive confirmation."
         return 1
     fi
-    printf '%s' \
-        'IELTS Codex: No compatible Python package is available. Add the third-party ppa:deadsnakes/ppa source to install one? [y/N] ' \
+    printf 'IELTS Codex: No Python %s+ interpreter was found. Use Astral uv (downloading pinned uv if needed) to install project-local Python %s into %s? This will not change the system Python or shell PATH. [y/N] ' \
+        "$MINIMUM_PYTHON" \
+        "$MANAGED_PYTHON" \
+        "$BOOTSTRAP_ROOT" \
         >&2
     if ! IFS= read -r answer; then
         return 1
@@ -137,80 +111,94 @@ confirm_deadsnakes_ppa() {
     esac
 }
 
-install_from_deadsnakes_ppa() {
-    if ! is_ubuntu || ! confirm_deadsnakes_ppa; then
+download_uv() {
+    local installer_url="https://astral.sh/uv/${UV_INSTALL_VERSION}/install.sh"
+    local installer_file=""
+    local uv_directory="$BOOTSTRAP_ROOT/bin"
+    local uv_executable="$uv_directory/uv"
+
+    mkdir -p "$uv_directory"
+    installer_file="$(mktemp "${TMPDIR:-/tmp}/ielts-codex-uv.XXXXXX")"
+    if command -v curl >/dev/null 2>&1; then
+        if ! curl -LsSf "$installer_url" -o "$installer_file"; then
+            rm -f -- "$installer_file"
+            die "Could not download the pinned uv installer from ${installer_url}."
+        fi
+    elif command -v wget >/dev/null 2>&1; then
+        if ! wget -qO "$installer_file" "$installer_url"; then
+            rm -f -- "$installer_file"
+            die "Could not download the pinned uv installer from ${installer_url}."
+        fi
+    else
+        rm -f -- "$installer_file"
+        die "The managed Python fallback requires curl or wget."
+    fi
+
+    info "Installing uv ${UV_INSTALL_VERSION} inside the project bootstrap directory..." >&2
+    if ! UV_UNMANAGED_INSTALL="$uv_directory" UV_NO_MODIFY_PATH=1 \
+        sh "$installer_file" >&2; then
+        rm -f -- "$installer_file"
+        die "The pinned uv installer failed."
+    fi
+    rm -f -- "$installer_file"
+    if [[ ! -x "$uv_executable" ]]; then
+        die "uv installation completed, but its executable was not found."
+    fi
+    printf '%s\n' "$uv_executable"
+}
+
+install_managed_python() {
+    local uv_executable=""
+    local managed_python=""
+    local python_directory="$BOOTSTRAP_ROOT/python"
+    local cache_directory="$BOOTSTRAP_ROOT/cache"
+
+    if ! confirm_managed_python; then
         return 1
     fi
-    if ! command -v add-apt-repository >/dev/null 2>&1; then
-        info "Installing add-apt-repository from the configured Ubuntu repositories..."
-        run_privileged apt-get install -y software-properties-common
+    if uv_executable="$(resolve_command uv)"; then
+        info "Using existing uv executable at ${uv_executable}."
+    elif [[ -x "$BOOTSTRAP_ROOT/bin/uv" ]]; then
+        uv_executable="$BOOTSTRAP_ROOT/bin/uv"
+    else
+        if ! uv_executable="$(download_uv)"; then
+            return 1
+        fi
     fi
-    info "Adding ppa:deadsnakes/ppa..."
-    if ! run_privileged add-apt-repository -y ppa:deadsnakes/ppa; then
-        info "The PPA command reported an update error; checking its cached package metadata."
-    fi
-    refresh_apt_cache
-    install_supported_apt_python
-}
 
-install_with_apt() {
-    info "No compatible Python found; checking APT for Python ${MINIMUM_PYTHON}+..."
-    refresh_apt_cache
-    if install_supported_apt_python; then
-        return
+    mkdir -p "$python_directory" "$cache_directory"
+    info "Installing project-local Python ${MANAGED_PYTHON} with uv..."
+    if ! UV_CACHE_DIR="$cache_directory" \
+        UV_PYTHON_INSTALL_DIR="$python_directory" \
+        UV_PYTHON_INSTALL_BIN=false \
+        "$uv_executable" python install "$MANAGED_PYTHON"; then
+        return 1
     fi
-    if install_from_deadsnakes_ppa; then
-        return
+    if ! managed_python="$(
+        UV_CACHE_DIR="$cache_directory" \
+            UV_PYTHON_INSTALL_DIR="$python_directory" \
+            "$uv_executable" python find "$MANAGED_PYTHON"
+    )"; then
+        return 1
     fi
-    die "Your configured APT repositories do not provide Python ${MINIMUM_PYTHON}+.
-Install a compatible Python version, set IELTS_CODEX_PYTHON, or rerun ./run.sh
-and approve the optional Ubuntu PPA when prompted."
-}
-
-install_with_dnf() {
-    info "No compatible Python found; installing the distribution Python with DNF..."
-    run_privileged dnf install -y python3
-}
-
-install_with_pacman() {
-    info "No compatible Python found; installing Python with pacman..."
-    run_privileged pacman -S --needed --noconfirm python
-}
-
-install_with_homebrew() {
-    info "No compatible Python found; installing Python with Homebrew..."
-    brew install python
-}
-
-install_python() {
-    if command -v apt-get >/dev/null 2>&1; then
-        install_with_apt
-        return
+    if ! is_compatible_python "$managed_python"; then
+        return 1
     fi
-    if command -v dnf >/dev/null 2>&1; then
-        install_with_dnf
-        return
-    fi
-    if command -v pacman >/dev/null 2>&1; then
-        install_with_pacman
-        return
-    fi
-    if command -v brew >/dev/null 2>&1; then
-        install_with_homebrew
-        return
-    fi
-    die "No supported package manager was found. Install Python ${MINIMUM_PYTHON}+,
-or set IELTS_CODEX_PYTHON to its executable path."
+    PYTHON_EXECUTABLE="$managed_python"
+    return 0
 }
 
 if ! find_python; then
     if [[ "${IELTS_CODEX_NO_AUTO_INSTALL:-}" == "1" ]]; then
         die "Python ${MINIMUM_PYTHON}+ is required. Set IELTS_CODEX_PYTHON or install it first."
     fi
-    install_python
+    if ! install_managed_python; then
+        die "Python ${MINIMUM_PYTHON}+ is required. Install it yourself, set
+IELTS_CODEX_PYTHON, or rerun ./run.sh interactively and approve the uv-managed
+project-local Python."
+    fi
     if ! find_python; then
-        die "Python installation finished, but no Python ${MINIMUM_PYTHON}+ interpreter was found.
-Set IELTS_CODEX_PYTHON to the installed executable and run ./run.sh again."
+        die "uv finished, but no Python ${MINIMUM_PYTHON}+ interpreter was found."
     fi
 fi
 

@@ -42,21 +42,16 @@ learning interface is Chinese-first.
 
 ## Quick start
 
-Python 3.10 or later is required. The recommended launcher locates a compatible
-interpreter automatically. If one is not installed, it uses the system package
-manager (APT, DNF, pacman, or Homebrew) to install Python; on Linux, this may
-prompt for your `sudo` password.
+Python 3.10 or later is required. The recommended launcher first looks for a
+compatible system interpreter. If none exists, it offers to install an isolated
+Python 3.12 through Astral uv, downloading pinned uv 0.11.32 when uv is not
+already available.
 
-For Ubuntu installations whose configured APT repositories do not provide
-Python 3.10+, such as some Focal setups, `run.sh` offers an optional
-`ppa:deadsnakes/ppa` fallback. The PPA is third-party, so the launcher explains
-the change and requires an explicit interactive `y` before adding it; declining
-does not modify your package sources.
-
-If an unrelated configured APT source fails during refresh, the launcher reports
-the failure and can continue with already verified cached metadata to install a
-compatible Python. Repair that source separately before your next normal system
-package update.
+The fallback requires an internet connection and an explicit interactive `y`.
+It keeps the uv executable, managed interpreter, and download cache under the
+ignored `.ielts-bootstrap` directory. It never invokes APT or another system
+package manager, needs no `sudo`, does not replace the system Python, and does
+not edit shell profiles or `PATH`. Later launches reuse that local Python.
 
 ```bash
 git clone https://github.com/Miracle-0v0/ielts-codex-cli.git
@@ -73,13 +68,13 @@ IELTS_CODEX_PYTHON=/usr/bin/python3.11 ./run.sh
 IELTS_CODEX_NO_AUTO_INSTALL=1 ./run.sh
 ```
 
-Direct `./ielts.py` launches still work with Python 3.10+, but now explain the
+Direct `./ielts.py` launches still work with Python 3.10+, and explain the
 version requirement clearly when an older interpreter is used.
 
 You can also install the `ielts-codex` command:
 
 ```bash
-# Replace python3.10 with any Python 3.10+ executable available on your system.
+# Use any Python 3.10+ executable available on your system.
 python3.10 -m pip install .
 ielts-codex
 ```

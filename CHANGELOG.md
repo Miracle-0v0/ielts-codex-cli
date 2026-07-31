@@ -4,6 +4,19 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.4] - 2026-07-31
+
+### Changed
+
+- Kept Python 3.10 as the minimum supported runtime and replaced all system
+  package-manager and third-party-PPA bootstrap paths with a user-confirmed,
+  project-local Python 3.12 installation managed by Astral uv.
+- Download pinned uv 0.11.32 only when uv is unavailable, without requiring
+  `sudo`, modifying APT sources, or depending on the distribution's packages.
+- Kept the interpreter, uv executable, and download cache isolated under the
+  ignored `.ielts-bootstrap` directory; the fallback does not replace the
+  system Python, edit shell profiles, or change PATH.
+
 ## [0.6.3] - 2026-07-31
 
 ### Fixed
@@ -173,6 +186,7 @@ Initial public release.
 - Search across English words, Chinese meanings, and synonyms.
 - An MIT license and open-source contribution guide.
 
+[0.6.4]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.0...v0.6.1
