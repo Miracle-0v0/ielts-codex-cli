@@ -129,13 +129,13 @@ handheld monster-adventure-style terminal game:
 › /game 3 environment
 ```
 
-On an interactive terminal, an 8-by-5-tile camera shows a grassland with
-paths, tree canopies, flowers, exploration fog, a capped trainer sprite, a
-full companion sprite, and animated letter creatures. A compact field map,
-party-style HUD, spell meter, and dialogue box retain the classic handheld
-adventure feel while remaining entirely original. The renderer packs two
-vertical pixels into each terminal cell, allowing the scene, minimap, and HUD
-to fit an 80-by-24 terminal.
+On an interactive terminal, a 7-by-4-tile camera renders each map tile as an
+8-by-8 pixel scene: layered grass blades, flower clusters, pebble paths, tree
+canopies, a full capped-trainer sprite, a complete companion, and animated
+letter creatures. A compact field map, party-style HUD, spell meter, and
+dialogue box retain the feeling of an original handheld monster adventure. The
+renderer packs two vertical pixels into each terminal cell, allowing the scene,
+minimap, and HUD to fit an 80-by-24 terminal.
 
 Move with `WASD` or the arrow keys and walk into letter monsters in the exact
 spelling order. A wrong monster costs hunger. Only a small circular pool around
@@ -216,8 +216,10 @@ never written to `game.json`.
 The game includes a complete, animated offline puppy that follows the player
 and opens the fog by default. Creating a custom pet is optional and replaces
 that puppy's appearance using your own vision-model account and API key. The
-API returns a strictly validated three-colour 7-by-6 indexed pixel sprite; it
+API returns a strictly validated three-colour 8-by-8 indexed pixel sprite; it
 cannot return terminal escape sequences or executable drawing instructions.
+Existing 7-by-6 companion saves remain supported and are safely padded into the
+larger field canvas when rendered.
 Configure a provider before launching IELTS Codex:
 
 ```bash

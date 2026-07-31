@@ -14,9 +14,12 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Rebuilt the game presentation as an original pocket-adventure-style pixel
-  field with grass, paths, tree canopies, flowers, trainer and companion
-  sprites, a field map, party HUD, spell meter, and dialogue box.
+- Refined the original pocket-adventure field from 7-by-6 into more detailed
+  8-by-8 pixel art: layered grass, flower clusters, pebble paths, textured tree
+  canopies, a fuller trainer, companion, and animated letter-creature sprites.
+- Kept the 80-by-24 layout by using a 7-by-4 field camera beside the field map.
+- Preserved custom companion saves from the earlier 7-by-6 sprite format by
+  padding them into the new rendering canvas; newly generated pets use 8-by-8.
 
 ## [0.5.1] - 2026-07-31
 

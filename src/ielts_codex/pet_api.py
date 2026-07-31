@@ -49,20 +49,34 @@ _ALLOWED_PROFILE_FIELDS = {
 _PET_GLYPHS = frozenset("&*;:mpcd")
 _PALETTE_COLOR_RE = re.compile(r"\A#[0-9A-Fa-f]{6}\Z")
 _SPRITE_PIXELS = frozenset(".123")
-_SPRITE_WIDTH = 7
-_SPRITE_HEIGHT = 6
+# New pets use the roomier eight-by-eight canvas used by the field renderer.
+# The compact seven-by-six form is deliberately retained for existing game.json
+# files created by 0.4/0.5.  The renderer expands that legacy form into the new
+# canvas at draw time, so updating the game never discards a user's companion.
+_SPRITE_WIDTH = 8
+_SPRITE_HEIGHT = 8
+_LEGACY_SPRITE_WIDTH = 7
+_LEGACY_SPRITE_HEIGHT = 6
+_SPRITE_DIMENSIONS = frozenset(
+    {
+        (_SPRITE_WIDTH, _SPRITE_HEIGHT),
+        (_LEGACY_SPRITE_WIDTH, _LEGACY_SPRITE_HEIGHT),
+    }
+)
 _JSON_FENCE_RE = re.compile(
     r"\A\s*```(?:json)?[ \t]*\r?\n(?P<body>.*?)\r?\n?```\s*\Z",
     re.IGNORECASE | re.DOTALL,
 )
 DEFAULT_PET_PALETTE = ("#493126", "#C9834D", "#FFE0A3")
 DEFAULT_PET_SPRITE = (
-    "11...11",
-    "1221221",
-    "1222221",
-    "1232321",
-    ".122211",
-    ".1.1.1.",
+    "11....11",
+    "1221..21",
+    "12222221",
+    "12323221",
+    "12222221",
+    ".122221.",
+    "..1..1..",
+    ".1....1.",
 )
 _PORTRAIT_ALLOWED = frozenset(
     " !\"#$%&'()*+,-./0123456789:;<=>?@"
@@ -814,22 +828,37 @@ def _validate_palette(
 
 def _validate_sprite(value: Any, *, json_array: bool) -> tuple[str, ...]:
     expected_type = list if json_array else tuple
-    if not isinstance(value, expected_type) or len(value) != _SPRITE_HEIGHT:
+    if not isinstance(value, expected_type):
         raise PetResponseError(
-            f"Pet sprite must contain exactly {_SPRITE_HEIGHT} pixel rows."
+            "Pet sprite must be an array of pixel rows."
         )
+    dimensions = (
+        (len(value[0]), len(value))
+        if value and isinstance(value[0], str)
+        else None
+    )
+    if dimensions not in _SPRITE_DIMENSIONS:
+        raise PetResponseError(
+            "Pet sprite must be 8 rows of 8 pixels; existing 7-by-6 saved "
+            "sprites are also supported."
+        )
+    expected_width, expected_height = dimensions
     sprite: list[str] = []
     for index, row in enumerate(value, start=1):
         if not isinstance(row, str):
             raise PetResponseError(f"Pet sprite row {index} must be text.")
-        if len(row) != _SPRITE_WIDTH or any(
+        if len(row) != expected_width or any(
             pixel not in _SPRITE_PIXELS for pixel in row
         ):
             raise PetResponseError(
-                f"Pet sprite row {index} must be exactly {_SPRITE_WIDTH} "
+                f"Pet sprite row {index} must be exactly {expected_width} "
                 "characters using only '.', '1', '2', and '3'."
             )
         sprite.append(row)
+    if len(sprite) != expected_height:
+        raise PetResponseError(
+            f"Pet sprite must contain exactly {expected_height} pixel rows."
+        )
     used_pixels = set("".join(sprite))
     if not {"1", "2", "3"}.issubset(used_pixels):
         raise PetResponseError("Pet sprite must use all 3 palette colors.")
@@ -910,7 +939,7 @@ Return exactly one JSON object with exactly these fields:
 - "portrait": an array of 1-7 printable ASCII-art lines, each at most 24 characters
 - "palette": exactly 3 distinct colors in #RRGGBB format, ordered as main/outline,
   secondary, then highlight
-- "sprite": exactly 6 strings of exactly 7 characters each; use only "." for
+- "sprite": exactly 8 strings of exactly 8 characters each; use only "." for
   transparency and "1", "2", "3" for the matching palette colors
 The sprite must be a centered, readable, full-body pet and use all three colors.
 Do not use Markdown, ANSI escapes, extra fields, or explanatory text.

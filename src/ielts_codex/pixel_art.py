@@ -1,10 +1,10 @@
 """ANSI pixel-art renderer for the pocket-adventure spelling game.
 
 The game engine continues to reason in map tiles. This module expands every
-logical tile into a 7 by 6 pixel canvas, then packs two vertical pixels into one
+logical tile into an 8 by 8 pixel canvas, then packs two vertical pixels into one
 terminal cell with the Unicode upper-half block (``▀``). The game view combines
 a 56-column local scene with a 20-column north-up minimap, so the complete
-viewport remains 77 columns by 15 terminal rows.
+viewport remains 77 columns by 16 terminal rows.
 
 The renderer is deliberately stateless and has no third-party dependencies. It
 uses an original grassland, tree-canopy, path, and creature palette inspired by
@@ -36,14 +36,16 @@ from .game_engine import GameEngine, GameSnapshot, Position, Tile
 from .pet_api import DEFAULT_PET_PALETTE, DEFAULT_PET_SPRITE, PetProfile
 
 
-TILE_PIXEL_WIDTH: Final = 7
-TILE_PIXEL_HEIGHT: Final = 6
-VIEWPORT_TILE_WIDTH: Final = 8
-VIEWPORT_TILE_HEIGHT: Final = 5
+TILE_PIXEL_WIDTH: Final = 8
+TILE_PIXEL_HEIGHT: Final = 8
+# Seven detailed tiles keep the local field at exactly 56 terminal columns;
+# four tiles high leave room for the command HUD in a regular 80-by-24 shell.
+VIEWPORT_TILE_WIDTH: Final = 7
+VIEWPORT_TILE_HEIGHT: Final = 4
 SCENE_TILE_WIDTH: Final = VIEWPORT_TILE_WIDTH
 SCENE_COLUMNS: Final = TILE_PIXEL_WIDTH * VIEWPORT_TILE_WIDTH
 MINIMAP_COLUMNS: Final = 20
-MINIMAP_MAP_ROWS: Final = 9
+MINIMAP_MAP_ROWS: Final = 10
 VIEWPORT_COLUMNS: Final = SCENE_COLUMNS + 1 + MINIMAP_COLUMNS
 VIEWPORT_ROWS: Final = TILE_PIXEL_HEIGHT * VIEWPORT_TILE_HEIGHT // 2
 ANSI_RESET: Final = "\x1b[0m"
@@ -75,9 +77,11 @@ _MINIMAP_MONSTER: Final = 147
 _PLAYER_CAP: Final = 196
 _PLAYER_CAP_LIGHT: Final = 203
 _PLAYER_SKIN: Final = 223
+_PLAYER_HAIR: Final = 94
 _PLAYER_JACKET: Final = 27
 _PLAYER_JACKET_LIGHT: Final = 39
 _PLAYER_PACK: Final = 94
+_PLAYER_LEGS: Final = 67
 _PLAYER_BOOTS: Final = 236
 _MONSTER_BODY: Final = 99
 _MONSTER_BODY_LIGHT: Final = 147
@@ -118,7 +122,7 @@ class PixelViewport:
 class PetSpriteData:
     """A validated animated pet sprite.
 
-    Frames contain exactly six strings of seven characters.  ``.`` is
+    Frames contain exactly eight strings of eight characters.  ``.`` is
     transparent; every other character must have an ANSI 256-colour entry in
     ``palette``.  Two or more frames can be supplied for animation, although a
     single static frame is also valid.
@@ -242,7 +246,8 @@ def pet_sprite_for(
     if isinstance(pet, PetSpriteData):
         return pet
     indexed_palette = DEFAULT_PET_PALETTE if pet is None else pet.palette
-    frame = tuple(DEFAULT_PET_SPRITE if pet is None else pet.sprite)
+    raw_frame = tuple(DEFAULT_PET_SPRITE if pet is None else pet.sprite)
+    frame = _normalise_pet_frame(raw_frame)
     mirrored = tuple(row[::-1] for row in frame)
     return PetSpriteData(
         frames=(frame, mirrored),
@@ -253,13 +258,37 @@ def pet_sprite_for(
     )
 
 
+def _normalise_pet_frame(frame: Sequence[str]) -> SpriteFrame:
+    """Return a current 8-by-8 frame, preserving compact legacy companions.
+
+    Version 0.4 and 0.5 profiles used seven-by-six indexed sprites.  Rather
+    than rewriting a saved profile (which could make later downgrades lose the
+    original artwork), add a transparent top/bottom border and one left pixel
+    while rendering.  New and API-created profiles already pass through
+    unchanged.
+    """
+
+    normalized = tuple(frame)
+    if (
+        len(normalized) == TILE_PIXEL_HEIGHT
+        and all(len(row) == TILE_PIXEL_WIDTH for row in normalized)
+    ):
+        return normalized
+    if len(normalized) == 6 and all(len(row) == 7 for row in normalized):
+        border = _TRANSPARENT * TILE_PIXEL_WIDTH
+        return (border, *(f"{_TRANSPARENT}{row}" for row in normalized), border)
+    raise ValueError(
+        "Pet profiles must use an 8-by-8 sprite or a legacy 7-by-6 sprite."
+    )
+
+
 def render_pet_preview(
     pet: PetProfile | PetSpriteData | None,
     *,
     colour: bool = True,
     frame: int = 0,
 ) -> list[str]:
-    """Render a complete seven-by-six companion as three terminal rows."""
+    """Render a complete eight-by-eight companion as four terminal rows."""
 
     sprite = pet_sprite_for(pet)
     canvas = _solid_tile(_VOID)
@@ -466,20 +495,24 @@ def _minimap_panel_line(content: str) -> str:
 
 _PLAYER_FRAMES: Final[tuple[SpriteFrame, ...]] = (
     (
-        "..RRR..",
-        ".rRRR..",
-        "..SS...",
-        ".JJB...",
-        ".J.J...",
-        ".K.K...",
+        "...RR...",
+        "..rRRR..",
+        "..HSSH..",
+        "..HSSH..",
+        "...JJ...",
+        "..JjBJ..",
+        "..L.L...",
+        ".K...K..",
     ),
     (
-        "..RRR..",
-        ".rRRR..",
-        "..SS...",
-        ".JJB...",
-        "..J.J..",
-        "K....K.",
+        "...RR...",
+        "..rRRR..",
+        "..HSSH..",
+        "..HSSH..",
+        "...JJ...",
+        "..JjBJ..",
+        ".L...L..",
+        "K.....K.",
     ),
 )
 
@@ -487,86 +520,13 @@ _PLAYER_PALETTE: Final[Mapping[str, int]] = {
     "R": _PLAYER_CAP,
     "r": _PLAYER_CAP_LIGHT,
     "S": _PLAYER_SKIN,
+    "H": _PLAYER_HAIR,
     "J": _PLAYER_JACKET,
+    "j": _PLAYER_JACKET_LIGHT,
     "B": _PLAYER_PACK,
+    "L": _PLAYER_LEGS,
     "K": _PLAYER_BOOTS,
 }
-
-_DOG_FRAMES: Final[tuple[SpriteFrame, ...]] = (
-    (
-        ".......",
-        ".BB....",
-        ".BEB..B",
-        ".BBBBBB",
-        "..B.B..",
-        ".b...b.",
-    ),
-    (
-        "......B",
-        ".BB..B.",
-        ".BEB.B.",
-        ".BBBBB.",
-        ".B..B..",
-        "..b..b.",
-    ),
-)
-
-_CAT_FRAMES: Final[tuple[SpriteFrame, ...]] = (
-    (
-        ".B...B.",
-        ".BBBBB.",
-        ".BEBEB.",
-        "..BNB..",
-        "..BBB.B",
-        ".b...b.",
-    ),
-    (
-        ".B...B.",
-        ".BBBBB.",
-        ".BEBEB.",
-        "..BNB.B",
-        "..BBBB.",
-        "..b.b..",
-    ),
-)
-
-_BIRD_FRAMES: Final[tuple[SpriteFrame, ...]] = (
-    (
-        ".......",
-        "...B...",
-        "..BEBT.",
-        ".BBBB..",
-        "..BB...",
-        "..b....",
-    ),
-    (
-        ".......",
-        "...B...",
-        ".BBEBT.",
-        "..BBB..",
-        "...B...",
-        "...b...",
-    ),
-)
-
-_RABBIT_FRAMES: Final[tuple[SpriteFrame, ...]] = (
-    (
-        "..B.B..",
-        "..B.B..",
-        ".BBEB..",
-        ".BBBBB.",
-        "..B.B..",
-        ".b...b.",
-    ),
-    (
-        "..B.B..",
-        "..B.B..",
-        ".BBEB..",
-        "..BBBB.",
-        ".B.B...",
-        "..b.b..",
-    ),
-)
 
 _LETTER_BITMAPS: Final[Mapping[str, tuple[str, ...]]] = {
     "A": ("010", "101", "111", "101", "101"),
@@ -652,39 +612,60 @@ def _terrain_canvas(
 def _floor_tile(position: Position) -> list[list[int]]:
     is_path = (position.x - 2 * position.y) % 13 in {0, 1}
     tile = _solid_tile(_PATH if is_path else _FLOOR)
-    palette = (
-        (_PATH_LIGHT, _PATH, _PATH_LIGHT)
-        if is_path
-        else (_FLOOR_LIGHT, _FLOOR_DARK, _FLOOR_LIGHT)
-    )
-    for offset, colour in enumerate(palette):
-        index = _noise(position.x, position.y, 7 + offset * 16) % (
-            TILE_PIXEL_WIDTH * TILE_PIXEL_HEIGHT
-        )
-        tile[index // TILE_PIXEL_WIDTH][index % TILE_PIXEL_WIDTH] = colour
-    if not is_path and _noise(position.x, position.y, 71) % 5 == 0:
-        flower = _noise(position.x, position.y, 89) % (
-            TILE_PIXEL_WIDTH * TILE_PIXEL_HEIGHT
-        )
-        tile[flower // TILE_PIXEL_WIDTH][flower % TILE_PIXEL_WIDTH] = _FLOWER
+    if is_path:
+        # Fine pebbles and alternating sunlit grains make a path read as a
+        # continuous trail rather than a flat tan map tile.
+        for offset, salt in enumerate((7, 29, 47, 83, 101, 131, 167)):
+            noise = _noise(position.x, position.y, salt)
+            x = noise % TILE_PIXEL_WIDTH
+            y = (noise // TILE_PIXEL_WIDTH + offset) % TILE_PIXEL_HEIGHT
+            tile[y][x] = _PATH_LIGHT if offset % 3 else _FLOOR_DARK
+        return tile
+
+    # Each blade is two pixels high where possible.  This deliberately leaves
+    # breathing room between clumps so the trainer, pet, and letter-creatures
+    # stay readable on the small terminal canvas.
+    for offset, salt in enumerate((11, 31, 53, 79, 107, 137, 173)):
+        noise = _noise(position.x, position.y, salt)
+        x = noise % TILE_PIXEL_WIDTH
+        y = 1 + (noise // TILE_PIXEL_WIDTH) % (TILE_PIXEL_HEIGHT - 1)
+        tile[y][x] = _FLOOR_LIGHT if offset % 3 else _FLOOR_DARK
+        if y > 1 and offset % 2 == 0:
+            lean = -1 if noise & 1 else 1
+            tile[y - 1][max(0, min(TILE_PIXEL_WIDTH - 1, x + lean))] = _FLOOR_LIGHT
+
+    if _noise(position.x, position.y, 71) % 5 == 0:
+        flower_x = 1 + _noise(position.x, position.y, 89) % (TILE_PIXEL_WIDTH - 2)
+        flower_y = 1 + _noise(position.x, position.y, 97) % (TILE_PIXEL_HEIGHT - 2)
+        for offset_x, offset_y in ((0, -1), (-1, 0), (1, 0), (0, 1)):
+            tile[flower_y + offset_y][flower_x + offset_x] = _FLOWER
+        tile[flower_y][flower_x] = _PATH_LIGHT
     return tile
 
 
 def _wall_tile(position: Position) -> list[list[int]]:
     """Render an impassable wall as a clustered tree canopy and trunk."""
 
-    tile = _solid_tile(_WALL)
+    tile = _solid_tile(_WALL_DARK)
+    for y in range(TILE_PIXEL_HEIGHT - 2):
+        for x in range(TILE_PIXEL_WIDTH):
+            leaf_noise = _noise(position.x * 3 + x, position.y * 5 + y, 41)
+            tile[y][x] = _WALL if leaf_noise % 5 else _WALL_LIGHT
+            if leaf_noise % 11 == 0:
+                tile[y][x] = _WALL_DARK
+    # Bright upper-leaf edges and a narrow trunk give every blocked tile a
+    # recognisable tree silhouette, even under the player light radius.
     for x in range(TILE_PIXEL_WIDTH):
-        tile[0][x] = _WALL_LIGHT
-    for y in range(1, TILE_PIXEL_HEIGHT - 2):
-        leaf = _noise(position.x, position.y, 41 + y) % TILE_PIXEL_WIDTH
-        tile[y][leaf] = _WALL_LIGHT
-        tile[y][(leaf + 3) % TILE_PIXEL_WIDTH] = _WALL_DARK
-    trunk_x = 2 + _noise(position.x, position.y, 61) % 3
-    for y in range(TILE_PIXEL_HEIGHT - 2, TILE_PIXEL_HEIGHT):
-        tile[y][trunk_x] = _TREE_TRUNK
-        if trunk_x + 1 < TILE_PIXEL_WIDTH:
-            tile[y][trunk_x + 1] = _TREE_TRUNK
+        if _noise(position.x, position.y, 61 + x) % 3:
+            tile[0][x] = _WALL_LIGHT
+    trunk_x = 2 + _noise(position.x, position.y, 83) % 3
+    for y in range(TILE_PIXEL_HEIGHT - 3, TILE_PIXEL_HEIGHT):
+        for x in range(trunk_x, min(TILE_PIXEL_WIDTH, trunk_x + 2)):
+            tile[y][x] = _TREE_TRUNK
+    if trunk_x > 0:
+        tile[TILE_PIXEL_HEIGHT - 2][trunk_x - 1] = _WALL
+    if trunk_x + 2 < TILE_PIXEL_WIDTH:
+        tile[TILE_PIXEL_HEIGHT - 2][trunk_x + 2] = _WALL
     return tile
 
 
@@ -697,10 +678,10 @@ def _fog_tile(
 ) -> list[list[int]]:
     tile = _solid_tile(_FOG)
     area = TILE_PIXEL_WIDTH * TILE_PIXEL_HEIGHT
-    wisp_count = min(6, 2 + round(max(0.0, min(1.0, density)) * 3))
+    wisp_count = min(10, 3 + round(max(0.0, min(1.0, density)) * 5))
     if dense:
-        wisp_count = min(6, wisp_count + 1)
-    salts = (59, 83, 127, 149, 191, 233)
+        wisp_count = min(10, wisp_count + 2)
+    salts = (59, 83, 127, 149, 191, 233, 257, 293, 331, 373)
     for offset, salt in enumerate(salts[:wisp_count]):
         wisp = (
             _noise(position.x, position.y, salt)
@@ -781,16 +762,24 @@ def _draw_entities(
 
 def _monster_frame(letter: str, phase: int) -> SpriteFrame:
     bitmap = _LETTER_BITMAPS.get(letter.upper(), _LETTER_BITMAPS["X"])
-    rows: list[str] = []
-    for y, bits in enumerate(bitmap):
-        fill = "n" if (y + phase) % 2 else "m"
-        row = list(f".M{fill * 3}M.")
+    # A compact original letter-creature: ears, round outlined body, shadow,
+    # and a five-pixel-tall glyph.  The two phases alternate its ears and feet
+    # to create a readable idle bounce at the low redraw rate.
+    rows = [
+        list("..M..M.." if phase else ".M..M..."),
+        list(".MmmmmM."),
+        list("MnnnnnnM"),
+        list("MnnnnnnM"),
+        list("MnnnnnnM"),
+        list("MnnnnnnM"),
+        list(".M.M..M." if phase else ".M..M.M."),
+        list("..s..s.." if phase else ".s....s."),
+    ]
+    for y, bits in enumerate(bitmap, start=2):
         for x, bit in enumerate(bits, start=2):
             if bit == "1":
-                row[x] = "L"
-        rows.append("".join(row))
-    rows.append(".s.M.M." if phase else ".M.M.M.")
-    return tuple(rows)
+                rows[y][x] = "L"
+    return tuple("".join(row) for row in rows)
 
 
 def _draw_world_sprite(
@@ -863,9 +852,11 @@ _MONO_LIT: Final[frozenset[int]] = frozenset(
         _PLAYER_CAP,
         _PLAYER_CAP_LIGHT,
         _PLAYER_SKIN,
+        _PLAYER_HAIR,
         _PLAYER_JACKET,
         _PLAYER_JACKET_LIGHT,
         _PLAYER_PACK,
+        _PLAYER_LEGS,
         _PLAYER_BOOTS,
         _MONSTER_OUTLINE,
         _MONSTER_LETTER,
