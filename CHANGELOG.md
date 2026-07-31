@@ -2,6 +2,22 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Added an optional, locally synthesized original chiptune BGM for interactive
+  game sessions, with persisted on/off preference, in-game `m` toggle, and a
+  safe silent fallback when no compatible system audio player is available.
+- Added `/game music [on|off|status]` for inspecting and managing BGM without
+  starting an expedition.
+
+### Changed
+
+- Rebuilt the game presentation as an original pocket-adventure-style pixel
+  field with grass, paths, tree canopies, flowers, trainer and companion
+  sprites, a field map, party HUD, spell meter, and dialogue box.
+
 ## [0.5.1] - 2026-07-31
 
 ### Changed

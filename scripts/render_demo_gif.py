@@ -609,7 +609,12 @@ def _demo_data_directory() -> Iterator[Path]:
     try:
         yield data_dir
     finally:
-        for filename in ("progress.json", "oewn_overlay.json"):
+        for filename in (
+            "progress.json",
+            "oewn_overlay.json",
+            "game.json",
+            "pocket-lexicon-bgm-v1.wav",
+        ):
             (data_dir / filename).unlink(missing_ok=True)
         try:
             data_dir.rmdir()
@@ -738,7 +743,7 @@ def _record_session(
         animation.output(stats_output, caption)
         animation.hold(caption, 7)
 
-        caption = "9 · Enter a real pixel-art fog run with the built-in dog"
+        caption = "9 · Enter the pocket pixel field with the built-in dog"
         animation.type_command("/game 1 environment", caption)
         child.sendline("/game 1 environment")
         game_output = _read_expect(child, "WASD/方向键")

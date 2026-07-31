@@ -39,7 +39,7 @@ SLASH_COMMANDS = (
     ("/learn", "学习未见单词"),
     ("/review", "复习到期卡片"),
     ("/quiz", "中文到英文拼写"),
-    ("/game", "局部灯光迷雾远征"),
+    ("/game", "口袋像素拼写远征"),
     ("/search", "查询单词或释义"),
     ("/words", "浏览词表"),
     ("/topics", "查看主题"),
@@ -307,6 +307,12 @@ class IELTSApp:
         if action in {"code", "secret"}:
             code = "".join(args[1:]) if len(args) > 1 else None
             self.game_mode.enter_secret_code(code)
+            return
+        if action in {"music", "bgm", "sound"}:
+            if len(args) > 2:
+                self.ui.warning("用法：/game music [on|off|status]")
+                return
+            self.game_mode.configure_bgm(args[1] if len(args) == 2 else None)
             return
         if action == "pet":
             if len(args) == 2 and args[1].lower() == "status":
@@ -934,9 +940,10 @@ class IELTSApp:
                 "/stats                  查看累计学习数据",
                 "/goal <数量>            修改每日目标",
                 "/update [status]         更新知识库与 GitHub stable 程序版本",
-                "/game [数量] [主题]       局部灯光与迷雾中的拼写远征",
+                "/game [数量] [主题]       口袋像素世界中的拼写远征",
                 "/game pet create <图片>  用自己的视觉 API 创建宠物",
                 "/game code [神秘代码]    输入游戏神秘代码",
+                "/game music [on|off]      查看或开关原创 8-bit BGM",
                 "/clear                  清屏",
                 "/quit                   保存并退出",
                 "",

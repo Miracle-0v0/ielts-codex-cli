@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable
 
+from .game_audio import BGMState, ChiptuneBGM
 from .game_engine import (
     Direction,
     EventType,
@@ -51,7 +52,7 @@ from .word_bank import WordBank
 
 GAME_DEFAULT_COUNT = 3
 GAME_MAX_COUNT = 10
-GAME_SCHEMA_VERSION = 2
+GAME_SCHEMA_VERSION = 3
 INPUT_POLL_SECONDS = 0.1
 DISPLAY_FRAME_SECONDS = 0.1
 ACTOR_FRAME_SECONDS = 0.2
@@ -163,8 +164,29 @@ class GameProfileStore:
         self.path = data_dir / "game.json"
 
     def load(self) -> SavedPet:
+        return self._load_record()[0]
+
+    def load_bgm_enabled(self) -> bool:
+        """Return the persisted music preference, defaulting to enabled."""
+
+        return self._load_record()[1]
+
+    def save(self, pet: SavedPet, *, bgm_enabled: bool = True) -> None:
+        if not isinstance(bgm_enabled, bool):
+            raise GameStoreError("The BGM preference must be a boolean.")
+        self._write_record(pet, bgm_enabled=bgm_enabled)
+
+    def set_bgm_enabled(self, enabled: bool) -> None:
+        """Persist a music preference while preserving the companion record."""
+
+        if not isinstance(enabled, bool):
+            raise GameStoreError("The BGM preference must be a boolean.")
+        pet, _previous = self._load_record()
+        self._write_record(pet, bgm_enabled=enabled)
+
+    def _load_record(self) -> tuple[SavedPet, bool]:
         if not self.path.exists():
-            return SavedPet(profile=DEFAULT_PET)
+            return SavedPet(profile=DEFAULT_PET), True
         try:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
             if not isinstance(payload, dict):
@@ -177,21 +199,25 @@ class GameProfileStore:
                 )
             if version == 1:
                 pet_record = _migrate_v1_pet_record(pet_record)
-            elif version != GAME_SCHEMA_VERSION:
+            elif version not in {2, GAME_SCHEMA_VERSION}:
                 raise GameStoreError(
                     f"Unsupported game save version {version!r}."
                 )
-            return SavedPet.from_record(pet_record)
+            bgm_enabled = payload.get("bgm_enabled", True)
+            if not isinstance(bgm_enabled, bool):
+                raise GameStoreError("The BGM preference must be a boolean.")
+            return SavedPet.from_record(pet_record), bgm_enabled
         except GameStoreError:
             raise
         except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
             raise GameStoreError(f"Could not read {self.path}: {exc}") from exc
 
-    def save(self, pet: SavedPet) -> None:
+    def _write_record(self, pet: SavedPet, *, bgm_enabled: bool) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         payload = {
             "version": GAME_SCHEMA_VERSION,
             "pet": pet.to_record(),
+            "bgm_enabled": bgm_enabled,
         }
         descriptor, temporary_name = tempfile.mkstemp(
             prefix=".game-", suffix=".json", dir=self.data_dir
@@ -326,6 +352,13 @@ class GameMode:
         self.ui = ui
         self.rng = rng or random.Random()
         self.profile_store = GameProfileStore(store.data_dir)
+        try:
+            self._bgm_preference = self.profile_store.load_bgm_enabled()
+        except GameStoreError:
+            # A corrupt companion save must not prevent the offline game from
+            # starting.  ``_load_pet`` will show the matching warning later.
+            self._bgm_preference = True
+        self.bgm = ChiptuneBGM(store.data_dir, enabled=self._bgm_preference)
         self._config_loader = config_loader
         self._client_factory = client_factory
         self.cheats = CheatState()
@@ -372,6 +405,64 @@ class GameMode:
             ],
         )
 
+    def configure_bgm(self, action: str | None = None) -> None:
+        """Show or persist the optional original-chiptune music setting."""
+
+        normalized = (action or "status").strip().casefold()
+        if normalized in {"", "status"}:
+            state = self.bgm.state
+            availability = (
+                f"可用 · {state.backend}"
+                if state.available
+                else "未检测到兼容本地播放器；游戏会保持静音"
+            )
+            self.ui.panel(
+                "game · music",
+                [
+                    f"状态      {state.label}",
+                    f"播放器    {availability}",
+                    "曲目      内置原创 8-bit 循环，不下载或使用第三方音乐",
+                    "游戏内    按 m 可即时开关；设置会保存到 game.json",
+                ],
+            )
+            return
+        if normalized not in {"on", "off"}:
+            self.ui.warning("用法：/game music [on|off|status]")
+            return
+        state, warning = self._set_bgm_enabled(normalized == "on")
+        if warning:
+            self.ui.warning(warning)
+        if state.enabled:
+            self.ui.success("BGM 已开启；下一次像素远征会开始播放。")
+        else:
+            self.ui.success("BGM 已关闭。")
+
+    def _set_bgm_enabled(self, enabled: bool) -> tuple[BGMState, str | None]:
+        """Set music state in memory and attempt to preserve it atomically."""
+
+        state = self.bgm.set_enabled(enabled)
+        self._bgm_preference = enabled
+        try:
+            self.profile_store.set_bgm_enabled(enabled)
+        except (GameStoreError, OSError) as exc:
+            return state, f"音乐设置仅在本次会话生效：{exc}"
+        return state, None
+
+    def _toggle_bgm(self) -> str:
+        state, warning = self._set_bgm_enabled(not self.bgm.enabled)
+        if state.enabled:
+            state = self.bgm.start()
+            message = (
+                "BGM 已开启：原创 8-bit 旋律正在播放。"
+                if state.playing
+                else "BGM 已开启，但未找到兼容播放器；保持静音。"
+            )
+        else:
+            message = "BGM 已关闭。"
+        if warning:
+            return f"{message} {warning}"
+        return message
+
     def run(
         self,
         count: int = GAME_DEFAULT_COUNT,
@@ -390,101 +481,110 @@ class GameMode:
             self.ui.warning(f"当前范围只有 {len(words)} 个可用单词。")
 
         pet = self._load_pet()
+        animated = self._can_animate()
+        if animated:
+            self.bgm.start()
+        else:
+            self.bgm.stop()
         cheat_label = " · ".join(self.cheats.active) or "关闭"
         self.ui.write()
         self.ui.panel(
-            "game · fog expedition",
+            "game · pocket field",
             [
                 f"远征      {len(words)} 个词 · {topic or 'all topics'}",
                 f"伙伴      {pet.profile.glyph} {pet.profile.name} · {pet.profile.species}",
                 "任务      撞击字母怪物，严格按单词拼写顺序击败它们",
-                "生存      小范围灯光、迷雾、饥饿、眩晕与生命值持续变化",
+                "世界      口袋式像素草原、小范围灯光与探索迷雾",
+                f"音乐      {self.bgm.label} · m 可开关",
                 f"神秘      {cheat_label}（仅本次 CLI 会话）",
-                "帮助      h 学习提示 · g 宠物指路 · q 退出并结算",
+                "帮助      h 学习提示 · g 宠物指路 · m 音乐 · q 退出并结算",
             ],
         )
 
         result = GameSessionResult()
         health = 50.0
         hunger = 100.0
-        animated = self._can_animate()
         mode_label = "实时动画" if animated else "无障碍回合制"
         self.ui.hint(f"  运行模式：{mode_label}")
-
-        for index, word in enumerate(words, start=1):
-            metrics = RoundMetrics(
-                cheat_active=bool(self.cheats.active),
-                invincible=self.cheats.invincible,
-            )
-            seed = self.rng.getrandbits(64)
-            game_config = GameConfig(
-                max_health=50.0,
-                hungry_threshold=55.0,
-                hunger_per_second=1.35,
-                player_vision_radius=2,
-                pet_vision_radius=pet.profile.vision_bonus,
-                invincible=self.cheats.invincible,
-                reveal_map=self.cheats.reveal_map,
-                time_limit_seconds=max(
-                    36.0, min(52.0, 20.0 + len(word.word) * 2.0)
-                ),
-                dizzy_damage_interval=8.0,
-            )
-            if animated:
-                game_clock: _PauseableClock | _StepClock = _PauseableClock()
-            else:
-                game_clock = _StepClock()
-            engine = GameEngine(
-                word,
-                seed=seed,
-                config=game_config,
-                clock=game_clock,
-                initial_health=health,
-                initial_hunger=hunger,
-            )
-            result.attempted += 1
-            if animated:
-                status = self._play_animated(
-                    engine,
-                    game_clock,
-                    pet.profile,
-                    index,
-                    len(words),
-                    metrics,
+        try:
+            for index, word in enumerate(words, start=1):
+                metrics = RoundMetrics(
+                    cheat_active=bool(self.cheats.active),
+                    invincible=self.cheats.invincible,
                 )
-            else:
-                status = self._play_turn_based(
-                    engine,
-                    game_clock,
-                    pet.profile,
-                    index,
-                    len(words),
-                    metrics,
+                seed = self.rng.getrandbits(64)
+                game_config = GameConfig(
+                    max_health=50.0,
+                    hungry_threshold=55.0,
+                    hunger_per_second=1.35,
+                    player_vision_radius=2,
+                    pet_vision_radius=pet.profile.vision_bonus,
+                    invincible=self.cheats.invincible,
+                    reveal_map=self.cheats.reveal_map,
+                    time_limit_seconds=max(
+                        36.0, min(52.0, 20.0 + len(word.word) * 2.0)
+                    ),
+                    dizzy_damage_interval=8.0,
                 )
-
-            snapshot = engine.snapshot()
-            health = snapshot.health
-            hunger = snapshot.hunger
-            if status is GameStatus.EXITED:
-                result.stopped = True
-                break
-
-            if status is GameStatus.COMPLETED:
-                result.completed += 1
-                rating = self._rating_for(metrics)
-                self.store.record_review(word.word, rating)
-                self._round_debrief(word, rating, metrics, snapshot, completed=True)
-            elif status is GameStatus.DEAD:
-                result.fainted += 1
-                self.store.record_review(word.word, Rating.AGAIN)
-                self._round_debrief(
+                if animated:
+                    game_clock: _PauseableClock | _StepClock = _PauseableClock()
+                else:
+                    game_clock = _StepClock()
+                engine = GameEngine(
                     word,
-                    Rating.AGAIN,
-                    metrics,
-                    snapshot,
-                    completed=False,
+                    seed=seed,
+                    config=game_config,
+                    clock=game_clock,
+                    initial_health=health,
+                    initial_hunger=hunger,
                 )
-                break
+                result.attempted += 1
+                if animated:
+                    status = self._play_animated(
+                        engine,
+                        game_clock,
+                        pet.profile,
+                        index,
+                        len(words),
+                        metrics,
+                    )
+                else:
+                    status = self._play_turn_based(
+                        engine,
+                        game_clock,
+                        pet.profile,
+                        index,
+                        len(words),
+                        metrics,
+                    )
+
+                snapshot = engine.snapshot()
+                health = snapshot.health
+                hunger = snapshot.hunger
+                if status is GameStatus.EXITED:
+                    result.stopped = True
+                    break
+
+                if status is GameStatus.COMPLETED:
+                    result.completed += 1
+                    rating = self._rating_for(metrics)
+                    self.store.record_review(word.word, rating)
+                    self._round_debrief(
+                        word, rating, metrics, snapshot, completed=True
+                    )
+                elif status is GameStatus.DEAD:
+                    result.fainted += 1
+                    self.store.record_review(word.word, Rating.AGAIN)
+                    self._round_debrief(
+                        word,
+                        Rating.AGAIN,
+                        metrics,
+                        snapshot,
+                        completed=False,
+                    )
+                    break
+        finally:
+            self.bgm.stop()
 
         self._summary(result, len(words), pet.profile)
         return result
@@ -530,7 +630,7 @@ class GameMode:
         try:
             result = self._client_factory(config).create_pet_from_prepared(image)
             saved = SavedPet.from_result(result)
-            self.profile_store.save(saved)
+            self.profile_store.save(saved, bgm_enabled=self._bgm_preference)
         except (PetAPIError, GameStoreError, OSError) as exc:
             self.ui.error(f"宠物创建失败：{exc}")
             self.ui.hint("离线默认宠物仍可正常进入 /game。")
@@ -592,14 +692,15 @@ class GameMode:
         self.ui.panel(
             "game · commands",
             [
-                "/game [数量] [主题]          开始局部灯光迷雾远征（默认 3）",
+                "/game [数量] [主题]          开始口袋像素拼写远征（默认 3）",
                 "/game pet create <图片>     用自己的视觉 API 创建宠物",
                 "/game pet status            查看宠物与非敏感来源信息",
                 "/game providers             查看支持的 API profile",
                 "/game code [神秘代码]       输入代码；status/reset 可管理效果",
+                "/game music [on|off|status] 查看或开关原创 8-bit BGM",
                 "/game help                  查看本帮助",
                 "",
-                "游戏中：WASD/方向键移动 · h 学习提示 · g 宠物指路 · q 退出",
+                "游戏中：WASD/方向键移动 · h 学习提示 · g 宠物指路 · m 音乐 · q 退出",
                 "没有 API 也可完整游玩；默认宠物会自动跟随并开视野。",
             ],
         )
@@ -722,6 +823,7 @@ class GameMode:
                             resize_paused = False
                             sync_pause_state()
                             last_frame = None
+                        self.bgm.keep_alive()
                         now = clock()
                         events = engine.tick(now)
                         self._consume_events(events, metrics, messages)
@@ -797,6 +899,9 @@ class GameMode:
                 if key == "g":
                     messages.append(self._use_pet_navigation(engine, pet, metrics))
                     continue
+                if key == "m":
+                    messages.append(self._toggle_bgm())
+                    continue
                 direction = _direction_for_key(key)
                 if direction is not None:
                     events = engine.move(direction, now=clock())
@@ -841,7 +946,7 @@ class GameMode:
             )
             try:
                 action = self.ui.prompt(
-                    "  动作 [w/a/s/d/h/g/q] › "
+                    "  动作 [w/a/s/d/h/g/m/q] › "
                 ).strip().lower()
             except (EOFError, KeyboardInterrupt):
                 self.ui.write()
@@ -860,9 +965,14 @@ class GameMode:
                 self._consume_events(events, metrics, messages)
                 messages.append(self._use_pet_navigation(engine, pet, metrics))
                 continue
+            if action in {"m", "music"}:
+                messages.append(self._toggle_bgm())
+                continue
             direction = _direction_for_key(action)
             if direction is None:
-                messages.append("可用动作：w/a/s/d 移动，h 提示，g 指路，q 退出。")
+                messages.append(
+                    "可用动作：w/a/s/d 移动，h 提示，g 指路，m 音乐，q 退出。"
+                )
                 continue
             events = engine.move(direction, now=clock.advance())
             if _move_succeeded(events):
@@ -907,28 +1017,32 @@ class GameMode:
             if compact
             else VIEWPORT_COLUMNS
         )
-        title = _truncate_cells(
-            f"IELTS CODEX // FOG RUN {index}/{total}",
-            frame_width,
-        )
+        title = f"POCKET FIELD · EXPEDITION {index}/{total}"
         header = [
             self.ui.style(
-                title,
+                _game_box_top(title, frame_width),
                 self.ui.palette.bold,
                 self.ui.palette.teal,
             ),
-            _truncate_cells(
-                f"HP {health_bar} {snapshot.health:>3.0f}  "
-                f"HUNGER {hunger_bar} {snapshot.hunger:>3.0f}  "
-                f"{state} · {atmosphere} · {snapshot.elapsed_seconds:04.0f}s",
-                frame_width,
+            self.ui.style(
+                _game_box_line(
+                    f"HP {health_bar} {snapshot.health:>3.0f}  "
+                    f"EN {hunger_bar} {snapshot.hunger:>3.0f}  "
+                    f"{state} · {atmosphere} · {self.bgm.label}",
+                    frame_width,
+                ),
+                self.ui.palette.green,
             ),
-            _truncate_cells(
-                f"线索  {engine.word.meaning_zh} · "
+            _game_box_line(
+                f"WILD WORD  {engine.word.meaning_zh} · "
                 f"{engine.word.part_of_speech} · {engine.word.topic}",
                 frame_width,
             ),
-            _truncate_cells(f"拼写  {pattern}", frame_width),
+            self.ui.style(
+                _game_box_bottom(f"SPELL  {pattern}", frame_width),
+                self.ui.palette.bold,
+                self.ui.palette.yellow,
+            ),
         ]
         map_lines = (
             self._render_map(engine, snapshot, pet, explored)
@@ -949,22 +1063,43 @@ class GameMode:
             )
         )
         footer = [
-            messages[-2] if len(messages) >= 2 else "",
-            messages[-1] if messages else "",
-            "WASD/方向键 · h 提示 · g 指路 · p 暂停 · ? 帮助 · q 退出",
+            self.ui.style(
+                _game_box_top("FIELD NOTES", frame_width),
+                self.ui.palette.bold,
+                self.ui.palette.violet,
+            ),
+            _game_box_line(messages[-1] if messages else "探索草原，找到下一只字母野怪。", frame_width),
+            _game_box_bottom(
+                "WASD/方向键 · h 提示 · g 指路 · m 音乐 · p 暂停 · ? 帮助 · q 退出",
+                frame_width,
+            ),
         ]
         if compact:
-            footer[-1] = "w/a/s/d 移动 · h 学习提示 · g 宠物指路 · q 退出"
+            footer[-1] = _game_box_bottom(
+                "w/a/s/d 移动 · h 提示 · g 指路 · m 音乐 · q 退出",
+                frame_width,
+            )
         if quit_pending:
-            footer[-2:] = ["退出当前远征？再按 q 确认。", "任意其他键取消并继续。"]
+            footer[1:] = [
+                _game_box_line("退出当前远征？再按 q 确认。", frame_width),
+                _game_box_bottom("任意其他键取消并继续。", frame_width),
+            ]
         if show_help:
-            footer[-2:] = [
-                "撞击当前正确字母会推进拼写；错误怪物会扣生命和饱腹。",
-                "h 逐级给学习线索；g 只报方向。按任意键关闭帮助。",
+            footer[1:] = [
+                _game_box_line(
+                    "撞击当前正确字母会推进拼写；错误怪物会扣生命和饱腹。",
+                    frame_width,
+                ),
+                _game_box_bottom(
+                    "h 逐级给学习线索；g 只报方向。按任意键关闭帮助。",
+                    frame_width,
+                ),
             ]
         if metrics.revealed_letter is not None:
-            footer[-2] = f"直接提示：下一只字母怪物是 {metrics.revealed_letter.upper()}。"
-        footer = [_truncate_cells(line, frame_width) for line in footer]
+            footer[1] = _game_box_line(
+                f"直接提示：下一只字母怪物是 {metrics.revealed_letter.upper()}。",
+                frame_width,
+            )
         return "\n".join((*header, *map_lines, *footer))
 
     def _render_map(
@@ -1482,6 +1617,46 @@ def _migrate_v1_pet_record(value: object) -> object:
 def _safe_single_line(value: str) -> bool:
     return bool(value) and all(
         char.isprintable() and char not in {"\r", "\n"} for char in value
+    )
+
+
+def _game_box_top(label: str, width: int) -> str:
+    """Render a Game-Boy-style top edge within an exact display width."""
+
+    if width < 5:
+        return _truncate_cells(label, width)
+    content = _truncate_cells(label, width - 4)
+    fill = max(0, width - 4 - _display_width(content))
+    return f"╭─{content} " + "─" * fill + "╮"
+
+
+def _game_box_line(content: str, width: int) -> str:
+    """Render a boxed game HUD or dialogue line without leaking width."""
+
+    if width < 3:
+        return _truncate_cells(content, width)
+    return f"│{_pad_cells(content, width - 2)}│"
+
+
+def _game_box_bottom(content: str, width: int) -> str:
+    """Render a Game-Boy-style bottom edge with status text."""
+
+    if width < 5:
+        return _truncate_cells(content, width)
+    return f"╰─{_pad_cells(content, width - 4)}─╯"
+
+
+def _pad_cells(value: str, width: int) -> str:
+    text = _truncate_cells(value, width)
+    return text + " " * max(0, width - _display_width(text))
+
+
+def _display_width(value: str) -> int:
+    import unicodedata
+
+    return sum(
+        2 if unicodedata.east_asian_width(char) in {"W", "F"} else 1
+        for char in value
     )
 
 

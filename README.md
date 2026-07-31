@@ -35,7 +35,8 @@ learning interface is Chinese-first.
 - English, Chinese, and synonym search
 - Manual Open English WordNet 2025 English-definition updates
 - Safe checks for newer stable releases from the official GitHub repository
-- Pixel-art spelling game with complete animated characters
+- Original pocket-adventure pixel spelling game with complete animated characters
+- Optional, locally generated 8-bit BGM with a safe silent fallback
 - Optional image-inspired pet creation through a bring-your-own-key vision API
 - Zero runtime dependencies
 
@@ -75,6 +76,7 @@ ielts-codex
 | `/game pet status` | Inspect the locally saved companion metadata |
 | `/game providers` | Show supported API provider profiles |
 | `/game code [code]` | Enter or manage a session-only mystery code |
+| `/game music [on\|off\|status]` | Control the optional original 8-bit BGM |
 | `/clear` | Clear the terminal |
 | `/quit` | Save and exit |
 
@@ -117,21 +119,23 @@ The quiz shows a Chinese meaning and asks for the English spelling. A correct
 answer advances the card. A misspelling reveals the answer and schedules the
 card as `Again`. Use `h` for a hint, `s` to skip, or `q` to stop.
 
-## Pixel game mode
+## Pocket pixel game mode
 
-Version 0.5.0 presents the survival expedition as a terminal pixel game:
+The `0.6` development branch evolves the survival expedition into an original
+handheld monster-adventure-style terminal game:
 
 ```text
 › /game
 › /game 3 environment
 ```
 
-On an interactive terminal, an 8-by-5-tile camera shows complete 7-by-6
-logical-pixel sprites beside a persistent north-up minimap. The player has a
-full body, the built-in puppy has a head, body, legs, and tail, and every letter
-appears inside a complete animated monster. The renderer packs two vertical
-pixels into each terminal cell, allowing the scene, minimap, and HUD to fit an
-80-by-24 terminal.
+On an interactive terminal, an 8-by-5-tile camera shows a grassland with
+paths, tree canopies, flowers, exploration fog, a capped trainer sprite, a
+full companion sprite, and animated letter creatures. A compact field map,
+party-style HUD, spell meter, and dialogue box retain the classic handheld
+adventure feel while remaining entirely original. The renderer packs two
+vertical pixels into each terminal cell, allowing the scene, minimap, and HUD
+to fit an 80-by-24 terminal.
 
 Move with `WASD` or the arrow keys and walk into letter monsters in the exact
 spelling order. A wrong monster costs hunger. Only a small circular pool around
@@ -163,6 +167,26 @@ use the text-only turn-based fallback. Non-TTY input and `TERM=dumb` use the
 same fallback so redirected or assistive input is not punished by wall-clock
 time. A pixel session requires at least 80 columns and 24 rows. Resizing below
 that limit pauses the game clock until the window is restored.
+
+### Original BGM
+
+The game can play a short, original chiptune loop in a compatible interactive
+terminal. The WAV is synthesized locally from the built-in score—nothing is
+downloaded, and no third-party game music or samples are used. macOS uses
+`afplay`; other platforms use an available local `ffplay`, `mpv`, `aplay`, or
+the Windows standard-library player. If no player is available, the game stays
+silent without affecting play or timing.
+
+Use `m` during an expedition for an immediate toggle, or manage the saved
+preference before a session:
+
+```text
+› /game music status
+› /game music off
+› /game music on
+```
+
+Set `IELTS_CODEX_GAME_BGM=0` to start a process with music disabled.
 
 Set `IELTS_CODEX_GAME_TURN_BASED=1` to choose the compatibility mode directly.
 `IELTS_CODEX_GAME_FORCE_PIXEL=1` skips only the POSIX character-width probe;
@@ -397,7 +421,8 @@ Learning progress is stored by default at:
 Each rating is saved immediately using a temporary file followed by an atomic
 replacement. This reduces the chance of corruption after an unexpected exit.
 
-Game companion metadata is stored separately at:
+Game companion metadata and the non-sensitive BGM preference are stored
+separately at:
 
 ```text
 ~/.ielts-codex/game.json

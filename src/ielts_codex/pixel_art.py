@@ -1,4 +1,4 @@
-"""ANSI pixel-art renderer for the survival-spelling game.
+"""ANSI pixel-art renderer for the pocket-adventure spelling game.
 
 The game engine continues to reason in map tiles. This module expands every
 logical tile into a 7 by 6 pixel canvas, then packs two vertical pixels into one
@@ -6,7 +6,9 @@ terminal cell with the Unicode upper-half block (``▀``). The game view combine
 a 56-column local scene with a 20-column north-up minimap, so the complete
 viewport remains 77 columns by 15 terminal rows.
 
-The renderer is deliberately stateless and has no third-party dependencies.
+The renderer is deliberately stateless and has no third-party dependencies. It
+uses an original grassland, tree-canopy, path, and creature palette inspired by
+classic handheld monster-adventure interfaces without using their assets.
 Its public entry points are:
 
 ``PixelArtRenderer.render``
@@ -50,33 +52,38 @@ _TRANSPARENT: Final = "."
 
 # ANSI 256-colour indexes.  Restricting the renderer to the standard palette
 # keeps output small and works in essentially every colour-capable terminal.
-_FOG: Final = 16
-_FOG_WISP: Final = 17
-_EXPLORED: Final = 234
-_EXPLORED_MARK: Final = 236
-_VOID: Final = 0
+_FOG: Final = 17
+_FOG_WISP: Final = 24
+_EXPLORED: Final = 22
+_EXPLORED_MARK: Final = 28
+_VOID: Final = 16
 _FLOOR: Final = 22
-_FLOOR_LIGHT: Final = 28
-_FLOOR_DARK: Final = 23
-_WALL: Final = 238
-_WALL_LIGHT: Final = 241
-_WALL_DARK: Final = 235
-_MINIMAP_VISIBLE_FLOOR: Final = 29
-_MINIMAP_VISIBLE_WALL: Final = 250
-_MINIMAP_PLAYER: Final = 51
-_MINIMAP_PET: Final = 141
-_MINIMAP_MONSTER: Final = 196
-_PLAYER_HAIR: Final = 52
+_FLOOR_LIGHT: Final = 34
+_FLOOR_DARK: Final = 28
+_PATH: Final = 179
+_PATH_LIGHT: Final = 223
+_FLOWER: Final = 213
+_WALL: Final = 28
+_WALL_LIGHT: Final = 70
+_WALL_DARK: Final = 22
+_TREE_TRUNK: Final = 94
+_MINIMAP_VISIBLE_FLOOR: Final = 77
+_MINIMAP_VISIBLE_WALL: Final = 28
+_MINIMAP_PLAYER: Final = 196
+_MINIMAP_PET: Final = 221
+_MINIMAP_MONSTER: Final = 147
+_PLAYER_CAP: Final = 196
+_PLAYER_CAP_LIGHT: Final = 203
 _PLAYER_SKIN: Final = 223
-_PLAYER_COAT: Final = 37
-_PLAYER_COAT_LIGHT: Final = 44
-_PLAYER_LEGS: Final = 24
-_PLAYER_BOOTS: Final = 94
-_MONSTER_BODY: Final = 88
-_MONSTER_BODY_LIGHT: Final = 124
-_MONSTER_OUTLINE: Final = 160
-_MONSTER_LETTER: Final = 226
-_MONSTER_SHADOW: Final = 52
+_PLAYER_JACKET: Final = 27
+_PLAYER_JACKET_LIGHT: Final = 39
+_PLAYER_PACK: Final = 94
+_PLAYER_BOOTS: Final = 236
+_MONSTER_BODY: Final = 99
+_MONSTER_BODY_LIGHT: Final = 147
+_MONSTER_OUTLINE: Final = 54
+_MONSTER_LETTER: Final = 231
+_MONSTER_SHADOW: Final = 60
 
 SpriteFrame = tuple[str, ...]
 
@@ -424,11 +431,11 @@ def render_minimap(
     total_tiles = engine.config.width * engine.config.height
     explored_percent = round(100 * len(known) / total_tiles) if total_tiles else 0
     sidebar = [
-        "┌──── MINI MAP ────┐",
+        "┌─── FIELD MAP ────┐",
         *map_lines,
         "├──────────────────┤",
-        _minimap_panel_line("@ YOU  p PET"),
-        _minimap_panel_line(f"M MOB  EXP {explored_percent:>3}%"),
+        _minimap_panel_line("@ YOU  p PAL"),
+        _minimap_panel_line(f"* WILD EXP {explored_percent:>3}%"),
         "└──────────────────┘",
         " " * MINIMAP_COLUMNS,
     ]
@@ -459,29 +466,29 @@ def _minimap_panel_line(content: str) -> str:
 
 _PLAYER_FRAMES: Final[tuple[SpriteFrame, ...]] = (
     (
-        "..HH...",
+        "..RRR..",
+        ".rRRR..",
         "..SS...",
-        ".CCCC..",
-        "cCCCCc.",
-        "..P.P..",
-        ".K...K.",
+        ".JJB...",
+        ".J.J...",
+        ".K.K...",
     ),
     (
-        "..HH...",
+        "..RRR..",
+        ".rRRR..",
         "..SS...",
-        ".cCCC..",
-        "CCCCCc.",
-        ".P..P..",
+        ".JJB...",
+        "..J.J..",
         "K....K.",
     ),
 )
 
 _PLAYER_PALETTE: Final[Mapping[str, int]] = {
-    "H": _PLAYER_HAIR,
+    "R": _PLAYER_CAP,
+    "r": _PLAYER_CAP_LIGHT,
     "S": _PLAYER_SKIN,
-    "C": _PLAYER_COAT,
-    "c": _PLAYER_COAT_LIGHT,
-    "P": _PLAYER_LEGS,
+    "J": _PLAYER_JACKET,
+    "B": _PLAYER_PACK,
     "K": _PLAYER_BOOTS,
 }
 
@@ -643,28 +650,41 @@ def _terrain_canvas(
 
 
 def _floor_tile(position: Position) -> list[list[int]]:
-    tile = _solid_tile(_FLOOR)
-    first = _noise(position.x, position.y, 7) % (TILE_PIXEL_WIDTH * TILE_PIXEL_HEIGHT)
-    second = _noise(position.x, position.y, 23) % (
-        TILE_PIXEL_WIDTH * TILE_PIXEL_HEIGHT
+    is_path = (position.x - 2 * position.y) % 13 in {0, 1}
+    tile = _solid_tile(_PATH if is_path else _FLOOR)
+    palette = (
+        (_PATH_LIGHT, _PATH, _PATH_LIGHT)
+        if is_path
+        else (_FLOOR_LIGHT, _FLOOR_DARK, _FLOOR_LIGHT)
     )
-    for index, colour in ((first, _FLOOR_LIGHT), (second, _FLOOR_DARK)):
+    for offset, colour in enumerate(palette):
+        index = _noise(position.x, position.y, 7 + offset * 16) % (
+            TILE_PIXEL_WIDTH * TILE_PIXEL_HEIGHT
+        )
         tile[index // TILE_PIXEL_WIDTH][index % TILE_PIXEL_WIDTH] = colour
+    if not is_path and _noise(position.x, position.y, 71) % 5 == 0:
+        flower = _noise(position.x, position.y, 89) % (
+            TILE_PIXEL_WIDTH * TILE_PIXEL_HEIGHT
+        )
+        tile[flower // TILE_PIXEL_WIDTH][flower % TILE_PIXEL_WIDTH] = _FLOWER
     return tile
 
 
 def _wall_tile(position: Position) -> list[list[int]]:
+    """Render an impassable wall as a clustered tree canopy and trunk."""
+
     tile = _solid_tile(_WALL)
     for x in range(TILE_PIXEL_WIDTH):
         tile[0][x] = _WALL_LIGHT
-        tile[TILE_PIXEL_HEIGHT - 1][x] = _WALL_DARK
-    offset = (_noise(position.x, position.y, 41) % 3) + 1
-    for y in (2, 4):
-        for x in range(TILE_PIXEL_WIDTH):
-            tile[y][x] = _WALL_DARK
-    for y in range(TILE_PIXEL_HEIGHT):
-        seam = (offset + (3 if y >= 3 else 0)) % TILE_PIXEL_WIDTH
-        tile[y][seam] = _WALL_LIGHT
+    for y in range(1, TILE_PIXEL_HEIGHT - 2):
+        leaf = _noise(position.x, position.y, 41 + y) % TILE_PIXEL_WIDTH
+        tile[y][leaf] = _WALL_LIGHT
+        tile[y][(leaf + 3) % TILE_PIXEL_WIDTH] = _WALL_DARK
+    trunk_x = 2 + _noise(position.x, position.y, 61) % 3
+    for y in range(TILE_PIXEL_HEIGHT - 2, TILE_PIXEL_HEIGHT):
+        tile[y][trunk_x] = _TREE_TRUNK
+        if trunk_x + 1 < TILE_PIXEL_WIDTH:
+            tile[y][trunk_x + 1] = _TREE_TRUNK
     return tile
 
 
@@ -840,11 +860,12 @@ _MONO_LIT: Final[frozenset[int]] = frozenset(
         _MINIMAP_PLAYER,
         _MINIMAP_PET,
         _MINIMAP_MONSTER,
-        _PLAYER_HAIR,
+        _PLAYER_CAP,
+        _PLAYER_CAP_LIGHT,
         _PLAYER_SKIN,
-        _PLAYER_COAT,
-        _PLAYER_COAT_LIGHT,
-        _PLAYER_LEGS,
+        _PLAYER_JACKET,
+        _PLAYER_JACKET_LIGHT,
+        _PLAYER_PACK,
         _PLAYER_BOOTS,
         _MONSTER_OUTLINE,
         _MONSTER_LETTER,
