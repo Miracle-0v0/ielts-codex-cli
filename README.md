@@ -47,6 +47,12 @@ interpreter automatically. If one is not installed, it uses the system package
 manager (APT, DNF, pacman, or Homebrew) to install Python; on Linux, this may
 prompt for your `sudo` password.
 
+For Ubuntu installations whose configured APT repositories do not provide
+Python 3.10+, such as some Focal setups, `run.sh` offers an optional
+`ppa:deadsnakes/ppa` fallback. The PPA is third-party, so the launcher explains
+the change and requires an explicit interactive `y` before adding it; declining
+does not modify your package sources.
+
 ```bash
 git clone https://github.com/Miracle-0v0/ielts-codex-cli.git
 cd ielts-codex-cli

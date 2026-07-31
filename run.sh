@@ -62,7 +62,7 @@ find_python() {
         die "IELTS_CODEX_PYTHON must name a Python ${MINIMUM_PYTHON}+ interpreter."
     fi
 
-    for candidate in python3.15 python3.14 python3.13 python3.12 python3.11 python3.10 python3; do
+    for candidate in python3 python3.10 python3.11 python3.12 python3.13 python3.14; do
         if use_python_if_compatible "$candidate"; then
             return 0
         fi
@@ -82,19 +82,82 @@ run_privileged() {
     die "Installing Python needs administrator access, but sudo is unavailable."
 }
 
-install_with_apt() {
+apt_package_available() {
+    local package="$1"
+    local exact_pattern="^${package//./\\.}$"
+
+    # apt-cache accepts regular expressions. Escape dots and anchor the package
+    # name so python3.12 cannot accidentally select postgresql-plpython3-12.
+    apt-cache show "$exact_pattern" >/dev/null 2>&1
+}
+
+install_supported_apt_python() {
     local package=""
 
-    info "No compatible Python found; checking APT for Python ${MINIMUM_PYTHON}+..."
-    run_privileged apt-get update
-    for package in python3.15 python3.14 python3.13 python3.12 python3.11 python3.10; do
-        if apt-cache show "$package" >/dev/null 2>&1; then
+    for package in python3.10 python3.11 python3.12 python3.13 python3.14; do
+        if apt_package_available "$package"; then
+            info "Installing ${package}..."
             run_privileged apt-get install -y "$package"
-            return
+            return 0
         fi
     done
+    return 1
+}
+
+is_ubuntu() {
+    local distribution_id=""
+
+    if [[ -r /etc/os-release ]]; then
+        distribution_id="$(. /etc/os-release; printf '%s' "${ID:-}")"
+    fi
+    [[ "$distribution_id" == "ubuntu" ]]
+}
+
+confirm_deadsnakes_ppa() {
+    local answer=""
+
+    if [[ ! -t 0 ]]; then
+        info "Ubuntu's optional Python PPA needs an interactive confirmation."
+        return 1
+    fi
+    printf '%s' \
+        'IELTS Codex: No compatible Python package is available. Add the third-party ppa:deadsnakes/ppa source to install one? [y/N] ' \
+        >&2
+    if ! IFS= read -r answer; then
+        return 1
+    fi
+    case "$answer" in
+        [yY] | [yY][eE][sS]) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+install_from_deadsnakes_ppa() {
+    if ! is_ubuntu || ! confirm_deadsnakes_ppa; then
+        return 1
+    fi
+    if ! command -v add-apt-repository >/dev/null 2>&1; then
+        info "Installing add-apt-repository from the configured Ubuntu repositories..."
+        run_privileged apt-get install -y software-properties-common
+    fi
+    info "Adding ppa:deadsnakes/ppa..."
+    run_privileged add-apt-repository -y ppa:deadsnakes/ppa
+    run_privileged apt-get update
+    install_supported_apt_python
+}
+
+install_with_apt() {
+    info "No compatible Python found; checking APT for Python ${MINIMUM_PYTHON}+..."
+    run_privileged apt-get update
+    if install_supported_apt_python; then
+        return
+    fi
+    if install_from_deadsnakes_ppa; then
+        return
+    fi
     die "Your configured APT repositories do not provide Python ${MINIMUM_PYTHON}+.
-Install a compatible Python version, then run ./run.sh again."
+Install a compatible Python version, set IELTS_CODEX_PYTHON, or rerun ./run.sh
+and approve the optional Ubuntu PPA when prompted."
 }
 
 install_with_dnf() {

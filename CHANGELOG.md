@@ -4,6 +4,17 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-07-31
+
+### Fixed
+
+- Made APT package detection use exact, escaped package names, preventing a
+  missing `python3.12` package from incorrectly selecting similarly named
+  packages such as PostgreSQL's Python extension.
+- Added a user-confirmed Ubuntu PPA fallback when configured APT repositories
+  do not provide Python 3.10+. The launcher never adds the third-party source
+  without an explicit interactive `y` response.
+
 ## [0.6.1] - 2026-07-31
 
 ### Added
@@ -152,6 +163,7 @@ Initial public release.
 - Search across English words, Chinese meanings, and synonyms.
 - An MIT license and open-source contribution guide.
 
+[0.6.2]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.5.0...v0.5.1
