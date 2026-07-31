@@ -11,14 +11,15 @@ The project requires only Python 3.10 or later:
 ```bash
 git clone https://github.com/Miracle-0v0/ielts-codex-cli.git
 cd ielts-codex-cli
-python3 ielts.py
+./run.sh
 ```
 
 Run the local checks:
 
 ```bash
+# Ensure python3 resolves to Python 3.10 or later.
 python3 -m py_compile src/ielts_codex/*.py
-python3 ielts.py --version
+./run.sh --version
 ```
 
 ## Pull requests

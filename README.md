@@ -42,18 +42,34 @@ learning interface is Chinese-first.
 
 ## Quick start
 
-Python 3.10 or later is required.
+Python 3.10 or later is required. The recommended launcher locates a compatible
+interpreter automatically. If one is not installed, it uses the system package
+manager (APT, DNF, pacman, or Homebrew) to install Python; on Linux, this may
+prompt for your `sudo` password.
 
 ```bash
 git clone https://github.com/Miracle-0v0/ielts-codex-cli.git
 cd ielts-codex-cli
-./ielts.py
+./run.sh
 ```
+
+`run.sh` is safe to use from a path containing spaces. To use a particular
+interpreter, set `IELTS_CODEX_PYTHON`; to prohibit automatic installation, set
+`IELTS_CODEX_NO_AUTO_INSTALL=1`:
+
+```bash
+IELTS_CODEX_PYTHON=/usr/bin/python3.11 ./run.sh
+IELTS_CODEX_NO_AUTO_INSTALL=1 ./run.sh
+```
+
+Direct `./ielts.py` launches still work with Python 3.10+, but now explain the
+version requirement clearly when an older interpreter is used.
 
 You can also install the `ielts-codex` command:
 
 ```bash
-python3 -m pip install .
+# Replace python3.10 with any Python 3.10+ executable available on your system.
+python3.10 -m pip install .
 ielts-codex
 ```
 
