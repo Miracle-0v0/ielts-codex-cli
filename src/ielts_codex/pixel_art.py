@@ -1,9 +1,10 @@
 """ANSI pixel-art renderer for the survival-spelling game.
 
-The game engine continues to reason in map tiles.  This module expands every
+The game engine continues to reason in map tiles. This module expands every
 logical tile into a 7 by 6 pixel canvas, then packs two vertical pixels into one
-terminal cell with the Unicode upper-half block (``▀``).  The default viewport
-is therefore 77 columns by 15 terminal rows.
+terminal cell with the Unicode upper-half block (``▀``). The game view combines
+a 56-column local scene with a 20-column north-up minimap, so the complete
+viewport remains 77 columns by 15 terminal rows.
 
 The renderer is deliberately stateless and has no third-party dependencies.
 Its public entry points are:
@@ -35,9 +36,13 @@ from .pet_api import DEFAULT_PET_PALETTE, DEFAULT_PET_SPRITE, PetProfile
 
 TILE_PIXEL_WIDTH: Final = 7
 TILE_PIXEL_HEIGHT: Final = 6
-VIEWPORT_TILE_WIDTH: Final = 11
+VIEWPORT_TILE_WIDTH: Final = 8
 VIEWPORT_TILE_HEIGHT: Final = 5
-VIEWPORT_COLUMNS: Final = TILE_PIXEL_WIDTH * VIEWPORT_TILE_WIDTH
+SCENE_TILE_WIDTH: Final = VIEWPORT_TILE_WIDTH
+SCENE_COLUMNS: Final = TILE_PIXEL_WIDTH * VIEWPORT_TILE_WIDTH
+MINIMAP_COLUMNS: Final = 20
+MINIMAP_MAP_ROWS: Final = 9
+VIEWPORT_COLUMNS: Final = SCENE_COLUMNS + 1 + MINIMAP_COLUMNS
 VIEWPORT_ROWS: Final = TILE_PIXEL_HEIGHT * VIEWPORT_TILE_HEIGHT // 2
 ANSI_RESET: Final = "\x1b[0m"
 
@@ -56,8 +61,11 @@ _FLOOR_DARK: Final = 23
 _WALL: Final = 238
 _WALL_LIGHT: Final = 241
 _WALL_DARK: Final = 235
-_RAIN: Final = 39
-_STORM_RAIN: Final = 45
+_MINIMAP_VISIBLE_FLOOR: Final = 29
+_MINIMAP_VISIBLE_WALL: Final = 250
+_MINIMAP_PLAYER: Final = 51
+_MINIMAP_PET: Final = 141
+_MINIMAP_MONSTER: Final = 196
 _PLAYER_HAIR: Final = 52
 _PLAYER_SKIN: Final = 223
 _PLAYER_COAT: Final = 37
@@ -135,11 +143,12 @@ class PetSpriteData:
 
 @dataclass(frozen=True, slots=True)
 class PixelArtRenderer:
-    """Render complete animated sprites and terrain into a terminal viewport.
+    """Render complete animated sprites and terrain into the local scene.
 
     ``colour`` selects ANSI 256-colour output.  Set it to ``False`` when output
     is redirected or the terminal does not support colour.  Rendering is a pure
     operation: the engine, snapshot, explored set, and pet are never mutated.
+    The higher-level :func:`render_pixel_viewport` adds the minimap sidebar.
     """
 
     colour: bool = True
@@ -153,18 +162,21 @@ class PixelArtRenderer:
         *,
         explored: AbstractSet[Position] | None = None,
         animation_tick: int | None = None,
+        fog_tick: int | None = None,
         player_frame: int | None = None,
     ) -> list[str]:
         """Return the current pixel-art viewport as terminal-ready lines.
 
-        ``animation_tick`` defaults to the weather tick, synchronising rain,
+        ``animation_tick`` defaults to the weather tick, synchronising fog,
         monster bobbing, the player's walking cycle, and the pet's wagging tail.
+        ``fog_tick`` may be advanced more slowly to reduce terminal redraws.
         A caller that tracks actual movement can pass ``player_frame`` to choose
         the player's walking frame independently.
         """
 
         current = engine.snapshot() if snapshot is None else snapshot
         tick = current.weather.tick if animation_tick is None else int(animation_tick)
+        mist_tick = tick if fog_tick is None else int(fog_tick)
         origin = camera_origin(engine, current, self.viewport)
         known = set(current.visible_positions)
         if explored is not None:
@@ -175,11 +187,8 @@ class PixelArtRenderer:
             origin,
             self.viewport,
             known,
-            tick,
+            mist_tick,
         )
-        # Lay rain over terrain first so faces, pet eyes, and the monsters'
-        # bitmap letters stay readable even in the densest storm.
-        _draw_rain(canvas, current, origin, self.viewport, tick)
         pet_pixels = _draw_entities(
             canvas,
             engine,
@@ -268,20 +277,184 @@ def render_pixel_viewport(
     *,
     explored: AbstractSet[Position] | None = None,
     animation_tick: int | None = None,
+    fog_tick: int | None = None,
     player_frame: int | None = None,
     colour: bool = True,
-    viewport: PixelViewport = PixelViewport(),
+    viewport: PixelViewport = PixelViewport(
+        SCENE_TILE_WIDTH,
+        VIEWPORT_TILE_HEIGHT,
+    ),
 ) -> list[str]:
-    """Convenience function returning a complete 77 by 15 default viewport."""
+    """Return the local light pool beside a persistent, fog-safe minimap."""
 
-    return PixelArtRenderer(colour=colour, viewport=viewport).render(
+    current = engine.snapshot() if snapshot is None else snapshot
+    known = set(current.visible_positions)
+    if explored is not None:
+        known.update(explored)
+    scene = PixelArtRenderer(colour=colour, viewport=viewport).render(
         engine,
-        snapshot,
+        current,
         pet,
-        explored=explored,
+        explored=known,
         animation_tick=animation_tick,
+        fog_tick=fog_tick,
         player_frame=player_frame,
     )
+    minimap = render_minimap(
+        engine,
+        current,
+        explored=known,
+        colour=colour,
+    )
+    if len(scene) != len(minimap):
+        raise ValueError("Scene and minimap heights must match.")
+    return [
+        f"{scene_line} {map_line}"
+        for scene_line, map_line in zip(scene, minimap)
+    ]
+
+
+def render_minimap(
+    engine: GameEngine,
+    snapshot: GameSnapshot | None = None,
+    *,
+    explored: AbstractSet[Position] | None = None,
+    colour: bool = True,
+) -> list[str]:
+    """Render a north-up minimap without exposing unexplored terrain or actors."""
+
+    current = engine.snapshot() if snapshot is None else snapshot
+    visible = set(current.visible_positions)
+    known = set(visible)
+    if explored is not None:
+        known.update(explored)
+    known = {
+        position
+        for position in known
+        if 0 <= position.x < engine.config.width
+        and 0 <= position.y < engine.config.height
+    }
+
+    inner_width = MINIMAP_COLUMNS - 2
+    inner_height = MINIMAP_MAP_ROWS
+    grid: list[list[tuple[str, int]]] = [
+        [("░", _FOG_WISP) for _ in range(inner_width)]
+        for _ in range(inner_height)
+    ]
+
+    for mini_y in range(inner_height):
+        world_y_start = mini_y * engine.config.height // inner_height
+        world_y_end = max(
+            world_y_start + 1,
+            (mini_y + 1) * engine.config.height // inner_height,
+        )
+        for mini_x in range(inner_width):
+            world_x_start = mini_x * engine.config.width // inner_width
+            world_x_end = max(
+                world_x_start + 1,
+                (mini_x + 1) * engine.config.width // inner_width,
+            )
+            bucket = [
+                Position(world_x, world_y)
+                for world_y in range(world_y_start, world_y_end)
+                for world_x in range(world_x_start, world_x_end)
+                if world_x < engine.config.width
+                and world_y < engine.config.height
+            ]
+            visible_bucket = [position for position in bucket if position in visible]
+            known_bucket = [position for position in bucket if position in known]
+            sample = visible_bucket or known_bucket
+            if not sample:
+                continue
+            walls = sum(engine.tile_at(position) is Tile.WALL for position in sample)
+            is_wall = walls * 2 >= len(sample)
+            if visible_bucket:
+                cell = (
+                    "#",
+                    _MINIMAP_VISIBLE_WALL
+                    if is_wall
+                    else _MINIMAP_VISIBLE_FLOOR,
+                )
+                if not is_wall:
+                    cell = ("·", _MINIMAP_VISIBLE_FLOOR)
+            else:
+                cell = (
+                    ("#", _WALL_DARK)
+                    if is_wall
+                    else ("·", _EXPLORED_MARK)
+                )
+            grid[mini_y][mini_x] = cell
+
+    def mark(position: Position, glyph: str, colour_index: int) -> None:
+        mini_x = min(
+            inner_width - 1,
+            position.x * inner_width // engine.config.width,
+        )
+        mini_y = min(
+            inner_height - 1,
+            position.y * inner_height // engine.config.height,
+        )
+        grid[mini_y][mini_x] = (glyph, colour_index)
+
+    monster_cells: dict[tuple[int, int], list[str]] = {}
+    for monster in engine.active_monsters:
+        if monster.position not in visible:
+            continue
+        mini_x = min(
+            inner_width - 1,
+            monster.position.x * inner_width // engine.config.width,
+        )
+        mini_y = min(
+            inner_height - 1,
+            monster.position.y * inner_height // engine.config.height,
+        )
+        monster_cells.setdefault((mini_x, mini_y), []).append(
+            monster.letter.upper()
+        )
+    for (mini_x, mini_y), letters in monster_cells.items():
+        glyph = letters[0] if len(letters) == 1 else "M"
+        grid[mini_y][mini_x] = (glyph, _MINIMAP_MONSTER)
+    mark(current.pet_position, "p", _MINIMAP_PET)
+    mark(current.player_position, "@", _MINIMAP_PLAYER)
+
+    map_lines = [
+        f"│{_render_minimap_row(row, colour=colour)}│"
+        for row in grid
+    ]
+    total_tiles = engine.config.width * engine.config.height
+    explored_percent = round(100 * len(known) / total_tiles) if total_tiles else 0
+    sidebar = [
+        "┌──── MINI MAP ────┐",
+        *map_lines,
+        "├──────────────────┤",
+        _minimap_panel_line("@ YOU  p PET"),
+        _minimap_panel_line(f"M MOB  EXP {explored_percent:>3}%"),
+        "└──────────────────┘",
+        " " * MINIMAP_COLUMNS,
+    ]
+    return sidebar
+
+
+def _render_minimap_row(
+    row: Sequence[tuple[str, int]],
+    *,
+    colour: bool,
+) -> str:
+    if not colour:
+        return "".join(glyph for glyph, _colour in row)
+    pieces: list[str] = []
+    previous: int | None = None
+    for glyph, colour_index in row:
+        if colour_index != previous:
+            pieces.append(f"\x1b[38;5;{colour_index}m")
+            previous = colour_index
+        pieces.append(glyph)
+    pieces.append(ANSI_RESET)
+    return "".join(pieces)
+
+
+def _minimap_panel_line(content: str) -> str:
+    return f"│{content[:18].ljust(18)}│"
 
 
 _PLAYER_FRAMES: Final[tuple[SpriteFrame, ...]] = (
@@ -450,9 +623,17 @@ def _terrain_canvas(
                 pixels = _solid_tile(_VOID)
             elif world not in visible:
                 if world in explored:
-                    pixels = _explored_tile(world)
+                    pixels = _explored_tile(world, engine.tile_at(world))
                 else:
-                    pixels = _fog_tile(world, animation_tick)
+                    pixels = _fog_tile(
+                        world,
+                        animation_tick,
+                        # Keep density tied to the slower fog phase. The
+                        # engine's finer-grained weather samples must not
+                        # trigger a full terminal redraw on their own.
+                        density=0.9 if snapshot.weather.is_storm else 0.35,
+                        dense=snapshot.weather.is_storm,
+                    )
             elif engine.tile_at(world) is Tile.WALL:
                 pixels = _wall_tile(world)
             else:
@@ -487,16 +668,34 @@ def _wall_tile(position: Position) -> list[list[int]]:
     return tile
 
 
-def _fog_tile(position: Position, tick: int) -> list[list[int]]:
+def _fog_tile(
+    position: Position,
+    tick: int,
+    *,
+    density: float,
+    dense: bool,
+) -> list[list[int]]:
     tile = _solid_tile(_FOG)
-    wisp = (_noise(position.x, position.y, 59) + tick) % (
-        TILE_PIXEL_WIDTH * TILE_PIXEL_HEIGHT
-    )
-    tile[wisp // TILE_PIXEL_WIDTH][wisp % TILE_PIXEL_WIDTH] = _FOG_WISP
+    area = TILE_PIXEL_WIDTH * TILE_PIXEL_HEIGHT
+    wisp_count = min(6, 2 + round(max(0.0, min(1.0, density)) * 3))
+    if dense:
+        wisp_count = min(6, wisp_count + 1)
+    salts = (59, 83, 127, 149, 191, 233)
+    for offset, salt in enumerate(salts[:wisp_count]):
+        wisp = (
+            _noise(position.x, position.y, salt)
+            + tick * (offset + 1)
+        ) % area
+        tile[wisp // TILE_PIXEL_WIDTH][wisp % TILE_PIXEL_WIDTH] = _FOG_WISP
     return tile
 
 
-def _explored_tile(position: Position) -> list[list[int]]:
+def _explored_tile(position: Position, terrain: Tile) -> list[list[int]]:
+    if terrain is Tile.WALL:
+        tile = _solid_tile(_WALL_DARK)
+        for x in range(TILE_PIXEL_WIDTH):
+            tile[0][x] = _EXPLORED_MARK
+        return tile
     tile = _solid_tile(_EXPLORED)
     mark = _noise(position.x, position.y, 71) % (
         TILE_PIXEL_WIDTH * TILE_PIXEL_HEIGHT
@@ -601,40 +800,6 @@ def _draw_world_sprite(
                     visible_pixels.add(pixel)
 
 
-def _draw_rain(
-    canvas: list[list[int]],
-    snapshot: GameSnapshot,
-    origin: Position,
-    viewport: PixelViewport,
-    tick: int,
-) -> None:
-    intensity = max(0.0, min(1.0, snapshot.weather.rain_intensity))
-    if intensity <= 0.0:
-        return
-    visible = snapshot.visible_positions
-    drops_per_tile = 2 if intensity >= 0.72 else 1
-    colour = _STORM_RAIN if snapshot.weather.is_storm else _RAIN
-    threshold = int(20 + intensity * 72)
-    for tile_y in range(viewport.height_tiles):
-        for tile_x in range(viewport.width_tiles):
-            world = Position(origin.x + tile_x, origin.y + tile_y)
-            if world not in visible:
-                continue
-            if _noise(world.x, world.y, 101) % 100 >= threshold:
-                continue
-            for drop in range(drops_per_tile):
-                seed = _noise(world.x, world.y, 173 + drop * 97)
-                drift = tick // 3 if snapshot.weather.is_storm else tick // 6
-                local_x = (seed + drift + drop * 3) % TILE_PIXEL_WIDTH
-                speed = 2 if snapshot.weather.is_storm else 1
-                local_y = (seed // 11 + tick * speed + drop) % TILE_PIXEL_HEIGHT
-                pixel_x = tile_x * TILE_PIXEL_WIDTH + local_x
-                pixel_y = tile_y * TILE_PIXEL_HEIGHT + local_y
-                canvas[pixel_y][pixel_x] = colour
-                if snapshot.weather.is_storm and local_y > 0 and local_x > 0:
-                    canvas[pixel_y - 1][pixel_x - 1] = colour
-
-
 def _blit_pixels(
     canvas: list[list[int]],
     pixels: Sequence[Sequence[int]],
@@ -671,8 +836,11 @@ def _pack_ansi(canvas: Sequence[Sequence[int]]) -> list[str]:
 _MONO_LIT: Final[frozenset[int]] = frozenset(
     {
         _WALL_LIGHT,
-        _RAIN,
-        _STORM_RAIN,
+        _MINIMAP_VISIBLE_FLOOR,
+        _MINIMAP_VISIBLE_WALL,
+        _MINIMAP_PLAYER,
+        _MINIMAP_PET,
+        _MINIMAP_MONSTER,
         _PLAYER_HAIR,
         _PLAYER_SKIN,
         _PLAYER_COAT,
@@ -808,6 +976,8 @@ __all__ = [
     "PetSpriteData",
     "PixelArtRenderer",
     "PixelViewport",
+    "MINIMAP_COLUMNS",
+    "SCENE_COLUMNS",
     "TILE_PIXEL_HEIGHT",
     "TILE_PIXEL_WIDTH",
     "VIEWPORT_COLUMNS",
@@ -816,6 +986,7 @@ __all__ = [
     "VIEWPORT_TILE_WIDTH",
     "camera_origin",
     "pet_sprite_for",
+    "render_minimap",
     "render_pet_preview",
     "render_pixel_viewport",
 ]

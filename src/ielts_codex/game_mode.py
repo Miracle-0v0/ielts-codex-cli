@@ -51,7 +51,9 @@ from .word_bank import WordBank
 GAME_DEFAULT_COUNT = 3
 GAME_MAX_COUNT = 10
 GAME_SCHEMA_VERSION = 2
-FRAME_SECONDS = 0.1
+INPUT_POLL_SECONDS = 0.1
+ACTOR_FRAME_SECONDS = 0.2
+FOG_FRAME_SECONDS = 0.35
 TURN_SECONDS = 0.25
 MIN_ANIMATED_COLUMNS = 80
 MIN_ANIMATED_ROWS = 24
@@ -209,6 +211,8 @@ class RoundMetrics:
     became_dizzy: bool = False
     revealed_letter: str | None = None
     direct_hint_pending: bool = False
+    cheat_active: bool = False
+    invincible: bool = False
 
 
 @dataclass(slots=True)
@@ -217,6 +221,23 @@ class GameSessionResult:
     completed: int = 0
     fainted: int = 0
     stopped: bool = False
+
+
+@dataclass(slots=True)
+class CheatState:
+    """Session-only mystery-code effects; never written to the save file."""
+
+    invincible: bool = False
+    reveal_map: bool = False
+
+    @property
+    def active(self) -> tuple[str, ...]:
+        effects: list[str] = []
+        if self.invincible:
+            effects.append("无敌")
+        if self.reveal_map:
+            effects.append("迷雾全开")
+        return tuple(effects)
 
 
 class _StepClock:
@@ -280,8 +301,55 @@ class GameMode:
         self.profile_store = GameProfileStore(store.data_dir)
         self._config_loader = config_loader
         self._client_factory = client_factory
+        self.cheats = CheatState()
 
-    def run(self, count: int = GAME_DEFAULT_COUNT, topic: str | None = None) -> GameSessionResult:
+    def enter_secret_code(self, code: str | None = None) -> bool:
+        """Enable a session-only game modifier from the main CLI prompt."""
+
+        if code is None:
+            try:
+                code = self.ui.prompt("  神秘代码 › ")
+            except (EOFError, KeyboardInterrupt):
+                self.ui.write()
+                self.ui.hint("  神秘代码输入已取消。")
+                return False
+        normalized = code.strip().casefold()
+        if normalized == "status":
+            self.show_cheat_status()
+            return True
+        if normalized == "reset":
+            self.cheats = CheatState()
+            self.ui.success("神秘效果已重置；迷雾与伤害规则恢复正常。")
+            return True
+        if normalized == "whosyourdaddy":
+            self.cheats.invincible = True
+            self.ui.success("神秘力量回应了你：无敌模式已开启。")
+            self.ui.hint("  效果仅持续到本次 IELTS Codex 退出。")
+            return True
+        if normalized == "iseedeadpeople":
+            self.cheats.reveal_map = True
+            self.ui.success("迷雾散开了：整张地图已揭示。")
+            self.ui.hint("  效果仅持续到本次 IELTS Codex 退出。")
+            return True
+        self.ui.warning("代码落入迷雾，没有任何反应。")
+        return False
+
+    def show_cheat_status(self) -> None:
+        effects = self.cheats.active
+        self.ui.panel(
+            "game · mystery code",
+            [
+                f"状态      {' · '.join(effects) if effects else '未启用'}",
+                "范围      当前 CLI 会话；退出后自动清除",
+                "重置      /game code reset",
+            ],
+        )
+
+    def run(
+        self,
+        count: int = GAME_DEFAULT_COUNT,
+        topic: str | None = None,
+    ) -> GameSessionResult:
         """Run a multi-word expedition and save one SRS result per word."""
 
         if not 1 <= count <= GAME_MAX_COUNT:
@@ -295,14 +363,16 @@ class GameMode:
             self.ui.warning(f"当前范围只有 {len(words)} 个可用单词。")
 
         pet = self._load_pet()
+        cheat_label = " · ".join(self.cheats.active) or "关闭"
         self.ui.write()
         self.ui.panel(
-            "game · storm expedition",
+            "game · fog expedition",
             [
                 f"远征      {len(words)} 个词 · {topic or 'all topics'}",
                 f"伙伴      {pet.profile.glyph} {pet.profile.name} · {pet.profile.species}",
                 "任务      撞击字母怪物，严格按单词拼写顺序击败它们",
-                "生存      雨、迷雾、饥饿、眩晕与生命值会持续变化",
+                "生存      小范围灯光、迷雾、饥饿、眩晕与生命值持续变化",
+                f"神秘      {cheat_label}（仅本次 CLI 会话）",
                 "帮助      h 学习提示 · g 宠物指路 · q 退出并结算",
             ],
         )
@@ -315,18 +385,23 @@ class GameMode:
         self.ui.hint(f"  运行模式：{mode_label}")
 
         for index, word in enumerate(words, start=1):
-            metrics = RoundMetrics()
+            metrics = RoundMetrics(
+                cheat_active=bool(self.cheats.active),
+                invincible=self.cheats.invincible,
+            )
             seed = self.rng.getrandbits(64)
             game_config = GameConfig(
                 max_health=50.0,
                 hungry_threshold=55.0,
                 hunger_per_second=1.35,
-                pet_vision_radius=4 + pet.profile.vision_bonus,
+                player_vision_radius=2,
+                pet_vision_radius=pet.profile.vision_bonus,
+                invincible=self.cheats.invincible,
+                reveal_map=self.cheats.reveal_map,
                 time_limit_seconds=max(
                     36.0, min(52.0, 20.0 + len(word.word) * 2.0)
                 ),
                 dizzy_damage_interval=8.0,
-                weather_tick_seconds=0.15,
             )
             if animated:
                 game_clock: _PauseableClock | _StepClock = _PauseableClock()
@@ -440,7 +515,7 @@ class GameMode:
             f"{saved.profile.glyph} {saved.profile.name} · {saved.profile.species}",
             saved.profile.personality,
             f"“{saved.profile.catchphrase}”",
-            f"视野加成  +{saved.profile.vision_bonus}",
+            f"伙伴灯光  半径 {saved.profile.vision_bonus} 格",
         ]
         self.ui.panel("companion created", lines)
         self.ui.success("宠物档案已保存；API key 和图片内容未保存。")
@@ -461,7 +536,7 @@ class GameMode:
                 f"{pet.profile.glyph} {pet.profile.name} · {pet.profile.species}",
                 pet.profile.personality,
                 f"“{pet.profile.catchphrase}”",
-                f"视野加成  +{pet.profile.vision_bonus}",
+                f"伙伴灯光  半径 {pet.profile.vision_bonus} 格",
                 f"来源      {pet.provider} · {pet.model}",
                 f"目标主机  {pet.endpoint_host}",
                 f"图片摘要  {digest}",
@@ -490,10 +565,11 @@ class GameMode:
         self.ui.panel(
             "game · commands",
             [
-                "/game [数量] [主题]          开始暴雨拼写远征（默认 3）",
+                "/game [数量] [主题]          开始局部灯光迷雾远征（默认 3）",
                 "/game pet create <图片>     用自己的视觉 API 创建宠物",
                 "/game pet status            查看宠物与非敏感来源信息",
                 "/game providers             查看支持的 API profile",
+                "/game code [神秘代码]       输入代码；status/reset 可管理效果",
                 "/game help                  查看本帮助",
                 "",
                 "游戏中：WASD/方向键移动 · h 学习提示 · g 宠物指路 · q 退出",
@@ -566,11 +642,11 @@ class GameMode:
     ) -> GameStatus:
         assert isinstance(clock, _PauseableClock)
         explored: set[Position] = set()
-        messages = [f"{pet.glyph} {pet.name} 跟进了雨幕。"]
+        messages = [f"{pet.glyph} {pet.name} 跟进了迷雾。"]
         quit_pending = False
         show_help = False
         key_reader = _ImmediateInput(self.ui.input_stream)
-        last_frame: str | None = None
+        last_frame: tuple[str, ...] | None = None
 
         try:
             key_reader.enter()
@@ -593,14 +669,16 @@ class GameMode:
                     paused=clock.paused,
                     quit_pending=quit_pending,
                     show_help=show_help,
-                    animation_tick=int(now / FRAME_SECONDS),
+                    animation_tick=int(now / ACTOR_FRAME_SECONDS),
+                    fog_tick=int(now / FOG_FRAME_SECONDS),
                 )
-                if frame != last_frame:
-                    cleared_frame = "\033[K\n".join(frame.splitlines()) + "\033[K"
-                    self.ui.write("\033[H" + cleared_frame, end="")
-                    last_frame = frame
+                frame_lines = tuple(frame.splitlines())
+                update = _terminal_frame_delta(last_frame, frame_lines)
+                if update:
+                    self.ui.write(update, end="")
+                    last_frame = frame_lines
 
-                key = key_reader.read(FRAME_SECONDS)
+                key = key_reader.read(INPUT_POLL_SECONDS)
                 if key is None:
                     continue
                 if quit_pending:
@@ -650,7 +728,7 @@ class GameMode:
             with suppress(OSError, ValueError):
                 key_reader.exit()
             with suppress(OSError, ValueError):
-                self.ui.write("\033[?25h\033[?1049l", end="")
+                self.ui.write("\033[0m\033[?25h\033[?1049l", end="")
         return engine.status
 
     def _play_turn_based(
@@ -728,11 +806,16 @@ class GameMode:
         show_help: bool = False,
         compact: bool = False,
         animation_tick: int | None = None,
+        fog_tick: int | None = None,
     ) -> str:
         state = "眩晕" if snapshot.is_dizzy else "饥饿" if snapshot.is_hungry else "正常"
+        if engine.config.invincible:
+            state = "无敌"
         if paused:
             state = "暂停"
-        weather = "暴雨" if snapshot.weather.is_storm else "雨"
+        atmosphere = "浓雾" if snapshot.weather.is_storm else "迷雾"
+        if engine.config.reveal_map:
+            atmosphere = "迷雾全开"
         health_bar = _meter(snapshot.health, engine.config.max_health, 10)
         hunger_bar = _meter(snapshot.hunger, engine.config.max_hunger, 10)
         pattern = " ".join(snapshot.captured_pattern)
@@ -745,7 +828,7 @@ class GameMode:
             else VIEWPORT_COLUMNS
         )
         title = _truncate_cells(
-            f"IELTS CODEX // STORM RUN {index}/{total}",
+            f"IELTS CODEX // FOG RUN {index}/{total}",
             frame_width,
         )
         header = [
@@ -757,7 +840,7 @@ class GameMode:
             _truncate_cells(
                 f"HP {health_bar} {snapshot.health:>3.0f}  "
                 f"HUNGER {hunger_bar} {snapshot.hunger:>3.0f}  "
-                f"{state} · {weather} · {snapshot.elapsed_seconds:04.0f}s",
+                f"{state} · {atmosphere} · {snapshot.elapsed_seconds:04.0f}s",
                 frame_width,
             ),
             _truncate_cells(
@@ -780,6 +863,7 @@ class GameMode:
                     if animation_tick is None
                     else animation_tick
                 ),
+                fog_tick=fog_tick,
                 player_frame=metrics.moves,
                 colour=self.ui.color,
             )
@@ -818,7 +902,12 @@ class GameMode:
             for x in range(engine.config.width):
                 position = Position(x, y)
                 if position not in visible:
-                    char = "·" if position in explored else "░"
+                    if position not in explored:
+                        char = "░"
+                    elif engine.tile_at(position) is Tile.WALL:
+                        char = "#"
+                    else:
+                        char = "·"
                     style = (self.ui.palette.gray,)
                 elif position == snapshot.player_position:
                     char = "@"
@@ -832,11 +921,6 @@ class GameMode:
                 elif engine.tile_at(position) is Tile.WALL:
                     char = "#"
                     style = (self.ui.palette.gray,)
-                elif _rain_at(position, snapshot):
-                    char = "|/\\"[
-                        (position.x + position.y + snapshot.weather.tick) % 3
-                    ]
-                    style = (self.ui.palette.blue,)
                 else:
                     char = "."
                     style = (self.ui.palette.dim,)
@@ -854,7 +938,12 @@ class GameMode:
             if event.type is EventType.WRONG_LETTER:
                 metrics.wrong_hits += 1
                 encountered = str(event.details.get("encountered", "?")).upper()
-                messages.append(f"{encountered} 不是下一只；饱腹和生命下降。")
+                if metrics.invincible:
+                    messages.append(
+                        f"{encountered} 不是下一只；饱腹下降，生命伤害被挡住。"
+                    )
+                else:
+                    messages.append(f"{encountered} 不是下一只；饱腹和生命下降。")
             elif event.type is EventType.LETTER_DEFEATED:
                 letter = str(event.details.get("letter", "?")).upper()
                 messages.append(f"击败 {letter}！拼写向前推进。")
@@ -866,16 +955,19 @@ class GameMode:
             elif event.type is EventType.HUNGRY:
                 messages.append("肚子在叫；正确击败字母可以恢复饱腹。")
             elif event.type is EventType.STARVING:
-                messages.append("饱腹已空，生命会持续下降。")
+                if metrics.invincible:
+                    messages.append("饱腹已空；无敌状态挡住了持续伤害。")
+                else:
+                    messages.append("饱腹已空，生命会持续下降。")
             elif event.type is EventType.DAMAGE:
                 cause = str(event.details.get("cause", "danger"))
                 amount = float(event.details.get("amount", 0.0))
                 messages.append(f"{cause} 造成 {amount:.0f} 点伤害。")
             elif event.type is EventType.WEATHER_CHANGED:
                 if event.details.get("storm_started"):
-                    messages.append("暴雨突然增强，雨幕压低了视线。")
+                    messages.append("迷雾突然变浓，远处只剩模糊的影子。")
                 elif event.details.get("storm_ended"):
-                    messages.append("最强的雨势过去了。")
+                    messages.append("浓雾稍稍退去。")
             elif event.type is EventType.HINT_CHANGED:
                 tier = str(event.details.get("tier", ""))
                 if tier == "example":
@@ -936,7 +1028,8 @@ class GameMode:
         if metrics.used_direct_letter:
             return Rating.AGAIN
         if (
-            metrics.hint_level > 0
+            metrics.cheat_active
+            or metrics.hint_level > 0
             or metrics.navigation_stages
             or metrics.wrong_hits >= 2
             or metrics.became_dizzy
@@ -957,6 +1050,8 @@ class GameMode:
         reason = (
             "直接字母提示"
             if metrics.used_direct_letter
+            else "启用神秘代码"
+            if metrics.cheat_active
             else "使用学习提示"
             if metrics.hint_level
             else "使用宠物指路"
@@ -1078,13 +1173,22 @@ def _direction_for_key(value: str) -> Direction | None:
     }.get(value)
 
 
-def _rain_at(position: Position, snapshot: GameSnapshot) -> bool:
-    sample = (
-        position.x * 97
-        + position.y * 193
-        + snapshot.weather.tick * 389
-    ) % 1000
-    return sample < int(snapshot.weather.rain_intensity * 220)
+def _terminal_frame_delta(
+    previous: tuple[str, ...] | None,
+    current: tuple[str, ...],
+) -> str:
+    """Return one batched ANSI update, redrawing only rows that changed."""
+
+    if previous is None or len(previous) != len(current):
+        return "\033[0m\033[H\033[J" + "".join(
+            f"\033[{row};1H{line}"
+            for row, line in enumerate(current, start=1)
+        )
+    pieces: list[str] = []
+    for row, (old_line, new_line) in enumerate(zip(previous, current), start=1):
+        if old_line != new_line:
+            pieces.append(f"\033[0m\033[{row};1H{new_line}\033[K")
+    return "".join(pieces)
 
 
 def _meter(value: float, maximum: float, width: int) -> str:

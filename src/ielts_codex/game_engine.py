@@ -226,9 +226,11 @@ class GameConfig:
     time_limit_seconds: float = 60.0
     dizzy_damage: float = 5.0
     dizzy_damage_interval: float = 5.0
-    player_vision_radius: int = 4
-    pet_vision_radius: int = 6
+    player_vision_radius: int = 2
+    pet_vision_radius: int = 2
     dizzy_vision_penalty: int = 2
+    invincible: bool = False
+    reveal_map: bool = False
     example_hint_after: float = 5.0
     next_letter_hint_after: float = 10.0
     direction_hint_after: float = 15.0
@@ -287,6 +289,10 @@ class GameConfig:
             raise ValueError("hungry_threshold must fit within the hunger range.")
         if not 1 <= self.distractor_count <= 25:
             raise ValueError("distractor_count must be in [1, 25].")
+        if not isinstance(self.invincible, bool):
+            raise ValueError("invincible must be a boolean.")
+        if not isinstance(self.reveal_map, bool):
+            raise ValueError("reveal_map must be a boolean.")
         if self.storm_duration_ticks < 0:
             raise ValueError("storm_duration_ticks cannot be negative.")
         if self.storm_duration_ticks > self.storm_cycle_ticks:
@@ -348,6 +354,8 @@ class GameEngine:
         if not math.isfinite(configured_health) or not math.isfinite(configured_hunger):
             raise ValueError("Initial health and hunger must be finite.")
         self.health = _clamp(configured_health, 0.0, self.config.max_health)
+        if self.config.invincible:
+            self.health = self.config.max_health
         self.hunger = _clamp(configured_hunger, 0.0, self.config.max_hunger)
         self.status = GameStatus.RUNNING if self.health > 0.0 else GameStatus.DEAD
         self._is_hungry = self.hunger <= self.config.hungry_threshold
@@ -487,14 +495,20 @@ class GameEngine:
 
     @property
     def visible_positions(self) -> frozenset[Position]:
+        if self.config.reveal_map:
+            return frozenset(
+                Position(x, y)
+                for y in range(self.config.height)
+                for x in range(self.config.width)
+            )
         player_radius = self.config.player_vision_radius
         pet_radius = self.config.pet_vision_radius
         if self._is_dizzy:
             player_radius = max(1, player_radius - self.config.dizzy_vision_penalty)
             pet_radius = max(1, pet_radius - self.config.dizzy_vision_penalty)
         return frozenset(
-            self._vision_disc(self.player_position, player_radius)
-            | self._vision_disc(self.pet_position, pet_radius)
+            self._field_of_view(self.player_position, player_radius)
+            | self._field_of_view(self.pet_position, pet_radius)
         )
 
     def tile_at(self, position: Position) -> Tile:
@@ -734,18 +748,15 @@ class GameEngine:
         if len(candidates) < monster_count:
             raise ValueError("The map does not have enough monster positions.")
 
-        # Prefer positions that do not spawn directly beside the player.  The
-        # deterministic fallback still supports small custom maps. Keep one
-        # monster inside the opening camera and vision disc so the pixel-game
-        # objective is visible immediately rather than starting on an empty
-        # scene.
+        # Keep one monster in the opening pool of light so the objective is
+        # immediately legible without opening the rest of the foggy map.
         showcase = next(
             (
                 position
                 for position in candidates
                 if position in self.visible_positions
-                and position.manhattan_distance(self.player_position) > 2
-                and abs(position.x - self.player_position.x) <= 5
+                and position.manhattan_distance(self.player_position) > 1
+                and abs(position.x - self.player_position.x) <= 3
                 and abs(position.y - self.player_position.y) <= 2
             ),
             None,
@@ -989,6 +1000,8 @@ class GameEngine:
     ) -> None:
         if amount <= 0.0 or self.status is not GameStatus.RUNNING:
             return
+        if self.config.invincible:
+            return
         previous = self.health
         self.health = max(0.0, self.health - amount)
         actual = previous - self.health
@@ -1009,7 +1022,9 @@ class GameEngine:
                 target_length=len(self.target_word),
             )
 
-    def _vision_disc(self, center: Position, radius: int) -> set[Position]:
+    def _field_of_view(self, center: Position, radius: int) -> set[Position]:
+        """Return a circular light pool with walls blocking tiles behind them."""
+
         visible: set[Position] = set()
         radius_squared = radius * radius
         for y in range(
@@ -1023,9 +1038,38 @@ class GameEngine:
                 position = Position(x, y)
                 dx = x - center.x
                 dy = y - center.y
-                if dx * dx + dy * dy <= radius_squared:
+                if (
+                    dx * dx + dy * dy <= radius_squared
+                    and self._has_line_of_sight(center, position)
+                ):
                     visible.add(position)
         return visible
+
+    def _has_line_of_sight(self, origin: Position, target: Position) -> bool:
+        """Use an integer ray and prevent light leaking through closed corners."""
+
+        return self._ray_is_clear(origin, target) and self._ray_is_clear(
+            target,
+            origin,
+        )
+
+    def _ray_is_clear(self, origin: Position, target: Position) -> bool:
+        points = _bresenham_line(origin, target)
+        previous = points[0]
+        for point in points[1:]:
+            step_x = point.x - previous.x
+            step_y = point.y - previous.y
+            if step_x and step_y:
+                horizontal = previous.moved(step_x, 0)
+                vertical = previous.moved(0, step_y)
+                if horizontal in self._walls and vertical in self._walls:
+                    return False
+            if point == target:
+                return True
+            if point in self._walls:
+                return False
+            previous = point
+        return True
 
     def _in_bounds(self, position: Position) -> bool:
         return (
@@ -1050,6 +1094,29 @@ class GameEngine:
                 details=details,
             )
         )
+
+
+def _bresenham_line(origin: Position, target: Position) -> tuple[Position, ...]:
+    """Return both endpoints of a deterministic integer grid ray."""
+
+    x = origin.x
+    y = origin.y
+    delta_x = abs(target.x - x)
+    delta_y = abs(target.y - y)
+    step_x = 1 if x < target.x else -1
+    step_y = 1 if y < target.y else -1
+    error = delta_x - delta_y
+    points = [origin]
+    while x != target.x or y != target.y:
+        doubled = error * 2
+        if doubled > -delta_y:
+            error -= delta_y
+            x += step_x
+        if doubled < delta_x:
+            error += delta_x
+            y += step_y
+        points.append(Position(x, y))
+    return tuple(points)
 
 
 def _stable_seed(seed: int | str | bytes, namespace: str) -> int:

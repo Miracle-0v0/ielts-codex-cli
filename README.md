@@ -71,6 +71,7 @@ ielts-codex
 | `/game pet create <image>` | Create a companion with a user-configured vision API |
 | `/game pet status` | Inspect the locally saved companion metadata |
 | `/game providers` | Show supported API provider profiles |
+| `/game code [code]` | Enter or manage a session-only mystery code |
 | `/clear` | Clear the terminal |
 | `/quit` | Save and exit |
 
@@ -115,25 +116,26 @@ card as `Again`. Use `h` for a hint, `s` to skip, or `q` to stop.
 
 ## Experimental pixel game mode
 
-Version 0.4.1 rebuilds the survival expedition as a terminal pixel game:
+Version 0.4.2 presents the survival expedition as a terminal pixel game:
 
 ```text
 › /game
 › /game 3 environment
 ```
 
-On an interactive terminal, an 11-by-5-tile camera shows complete 7-by-6
-logical-pixel sprites instead of single-character map markers. The player has a
+On an interactive terminal, an 8-by-5-tile camera shows complete 7-by-6
+logical-pixel sprites beside a persistent north-up minimap. The player has a
 full body, the built-in puppy has a head, body, legs, and tail, and every letter
 appears inside a complete animated monster. The renderer packs two vertical
-pixels into each terminal cell, allowing the pixel scene and HUD to fit an
+pixels into each terminal cell, allowing the scene, minimap, and HUD to fit an
 80-by-24 terminal.
 
 Move with `WASD` or the arrow keys and walk into letter monsters in the exact
-spelling order. A wrong monster costs hunger. Animated rain crosses the visible
-scene, fog hides unexplored tiles, and taking too long progresses through
-hunger, dizziness, and health loss. Your pet follows behind and extends the
-visible area.
+spelling order. A wrong monster costs hunger. Only a small circular pool around
+the player and companion is lit, walls block that light, and animated fog hides
+the rest of the map. The minimap remembers explored terrain without exposing
+unseen monsters or walls. Taking too long progresses through hunger, dizziness,
+and health loss; the companion follows behind and adds a second small light.
 
 The two help channels are intentionally separate:
 
@@ -153,6 +155,26 @@ Interactive terminals use a smooth alternate-screen animation that redraws
 in place. Non-TTY input and `TERM=dumb` use an explicit text-only, turn-based
 fallback so redirected or assistive input is not punished by wall-clock time.
 A pixel session requires at least 80 columns and 24 rows.
+
+### Mystery codes
+
+Enter a code from the main interactive prompt:
+
+```text
+› /game code
+  神秘代码 › WhosYourDaddy
+```
+
+You may also put the code on the same line. `WhosYourDaddy` enables
+invincibility, while `ISeeDeadPeople` reveals the full map and removes the fog
+of war. These effects last only for the current IELTS Codex process and are
+never written to `game.json`.
+
+```text
+› /game code ISeeDeadPeople
+› /game code status
+› /game code reset
+```
 
 ### Create a pet from an image
 

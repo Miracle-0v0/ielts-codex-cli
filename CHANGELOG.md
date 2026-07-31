@@ -2,7 +2,27 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## [0.4.1] - Unreleased
+## [0.4.2] - Unreleased
+
+### Added
+
+- Added a persistent north-up minimap that remembers explored terrain without
+  revealing unseen monsters, walls, or floor tiles.
+- Added session-only `/game code` input: `WhosYourDaddy` enables
+  invincibility and `ISeeDeadPeople` reveals the full map.
+
+### Changed
+
+- Rebalanced the expedition around a small player-and-companion light pool,
+  with walls now blocking light and dense fog covering the remaining map.
+- Replaced the pixel rain overlay with animated fog and retained the complete
+  80-by-24 terminal layout by placing an 8-by-5 scene beside the minimap.
+- Reduced macOS terminal load with row-differential redraws and a slower,
+  independently animated fog layer while keeping character animation responsive.
+- Capped cheat-assisted rounds at `Hard` so mystery codes cannot be recorded as
+  unaided recall.
+
+## [0.4.1] - 2026-07-30
 
 ### Changed
 
