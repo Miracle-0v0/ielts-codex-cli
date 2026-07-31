@@ -2,7 +2,14 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## [0.5.0] - Unreleased
+## [0.5.1] - 2026-07-31
+
+### Changed
+
+- Display the running IELTS Codex version in the interactive startup and
+  `/clear` masthead.
+
+## [0.5.0] - 2026-07-31
 
 ### Added
 
@@ -109,6 +116,7 @@ Initial public release.
 - Search across English words, Chinese meanings, and synonyms.
 - An MIT license and open-source contribution guide.
 
+[0.5.1]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.3.1...v0.5.0
 [0.3.1]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.2.0...v0.3.0

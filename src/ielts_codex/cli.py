@@ -83,7 +83,7 @@ class IELTSApp:
         self.running = True
 
     def run(self) -> int:
-        self.ui.banner()
+        self.ui.banner(__version__)
         self.show_today(compact=True)
         self.ui.hint(
             "  输入 /learn 学习，/game 远征，/update 手动联网更新；"
@@ -335,7 +335,7 @@ class IELTSApp:
 
     def _command_clear(self, _args: list[str]) -> None:
         self.ui.clear()
-        self.ui.banner()
+        self.ui.banner(__version__)
 
     def _command_quit(self, _args: list[str]) -> None:
         self.running = False

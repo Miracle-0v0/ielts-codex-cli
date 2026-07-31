@@ -271,7 +271,9 @@ class TerminalUI:
         if self.stream.isatty():
             self.write("\033[2J\033[H", end="")
 
-    def banner(self) -> None:
+    def banner(self, version: str | None = None) -> None:
+        """Render the application masthead, optionally including its version."""
+
         logo = [
             "  ██╗███████╗██╗  ████████╗███████╗",
             "  ██║██╔════╝██║  ╚══██╔══╝██╔════╝",
@@ -286,8 +288,17 @@ class TerminalUI:
         self.write(
             "  "
             + self.style("CODEX", self.palette.bold)
+            + (
+                self.style(f"  v{version}", self.palette.teal)
+                if version
+                else ""
+            )
             + self.style(
-                "  vocabulary trainer · adaptive review",
+                (
+                    "  · vocabulary trainer · adaptive review"
+                    if version
+                    else "  vocabulary trainer · adaptive review"
+                ),
                 self.palette.dim,
             )
         )
