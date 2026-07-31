@@ -53,6 +53,11 @@ Python 3.10+, such as some Focal setups, `run.sh` offers an optional
 the change and requires an explicit interactive `y` before adding it; declining
 does not modify your package sources.
 
+If an unrelated configured APT source fails during refresh, the launcher reports
+the failure and can continue with already verified cached metadata to install a
+compatible Python. Repair that source separately before your next normal system
+package update.
+
 ```bash
 git clone https://github.com/Miracle-0v0/ielts-codex-cli.git
 cd ielts-codex-cli

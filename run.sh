@@ -84,11 +84,16 @@ run_privileged() {
 
 apt_package_available() {
     local package="$1"
-    local exact_pattern="^${package//./\\.}$"
 
-    # apt-cache accepts regular expressions. Escape dots and anchor the package
-    # name so python3.12 cannot accidentally select postgresql-plpython3-12.
-    apt-cache show "$exact_pattern" >/dev/null 2>&1
+    # apt-cache show accepts regular expressions. Its literal package-name list
+    # plus grep's fixed, whole-line match avoids regex fallback entirely.
+    apt-cache pkgnames | grep -Fqx -- "$package"
+}
+
+refresh_apt_cache() {
+    if ! run_privileged apt-get update; then
+        info "APT update reported an error from another configured repository; continuing with cached package metadata. Repair that repository before your next normal system update."
+    fi
 }
 
 install_supported_apt_python() {
@@ -141,14 +146,16 @@ install_from_deadsnakes_ppa() {
         run_privileged apt-get install -y software-properties-common
     fi
     info "Adding ppa:deadsnakes/ppa..."
-    run_privileged add-apt-repository -y ppa:deadsnakes/ppa
-    run_privileged apt-get update
+    if ! run_privileged add-apt-repository -y ppa:deadsnakes/ppa; then
+        info "The PPA command reported an update error; checking its cached package metadata."
+    fi
+    refresh_apt_cache
     install_supported_apt_python
 }
 
 install_with_apt() {
     info "No compatible Python found; checking APT for Python ${MINIMUM_PYTHON}+..."
-    run_privileged apt-get update
+    refresh_apt_cache
     if install_supported_apt_python; then
         return
     fi

@@ -4,6 +4,16 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-07-31
+
+### Fixed
+
+- Switched exact APT package checks to literal package-name-list matching for
+  compatibility with older Ubuntu APT releases.
+- Allowed the launcher to continue with verified cached package metadata when
+  an unrelated configured APT repository fails to refresh, while clearly
+  reporting that the broken repository still needs repair.
+
 ## [0.6.2] - 2026-07-31
 
 ### Fixed
@@ -163,6 +173,7 @@ Initial public release.
 - Search across English words, Chinese meanings, and synonyms.
 - An MIT license and open-source contribution guide.
 
+[0.6.3]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.5.1...v0.6.0
