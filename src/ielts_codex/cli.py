@@ -200,7 +200,7 @@ class IELTSApp:
                 self.show_update_status()
             else:
                 self.ui.error(
-                    "用法：ielts-codex update [status] [--force] [--dry-run]"
+                    "用法：ielts update [status] [--force] [--dry-run]"
                 )
                 return 2
         elif command == "sync":
@@ -211,7 +211,7 @@ class IELTSApp:
             if query.lower() == "status" and not force and not dry_run:
                 self.show_sync_status()
             else:
-                self.ui.error("用法：ielts-codex sync [status] [--force] [--dry-run]")
+                self.ui.error("用法：ielts sync [status] [--force] [--dry-run]")
                 return 2
         elif command == "game":
             self.game_mode.run(count, topic)
@@ -957,7 +957,7 @@ class IELTSApp:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="ielts-codex",
+        prog="ielts",
         description="Codex 风格的雅思词汇终端训练器",
     )
     parser.add_argument(

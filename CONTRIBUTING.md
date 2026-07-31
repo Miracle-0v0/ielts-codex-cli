@@ -20,16 +20,23 @@ On Windows Command Prompt, use the native launcher instead:
 run.bat
 ```
 
+To register the same Codex-style `ielts` command that users run, execute
+`./install.sh` on Ubuntu/macOS or `install.bat` on Windows. These installers
+operate at user level and keep the command linked to the source checkout.
+
 Run the local checks:
 
 ```bash
 # Ensure python3 resolves to Python 3.10 or later.
 python3 -m py_compile src/ielts_codex/*.py
 ./run.sh --version
+python3 -m pip install .
+ielts-codex --version
 ```
 
-The repository's launcher compatibility workflow repeats the version check on
-Ubuntu, macOS, and Windows for every change to `main` and every pull request.
+The repository's launcher compatibility workflow repeats packaged-command,
+source-installer, and launcher version checks on Ubuntu, macOS, and Windows for
+every change to `main` and every pull request.
 
 ## Pull requests
 

@@ -4,6 +4,30 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.6] - 2026-07-31
+
+### Added
+
+- Added one-time user-level command installers for Ubuntu/macOS (`install.sh`)
+  and Windows (`install.bat`) so a source checkout launches with the short
+  `ielts` command, backed by the existing Python 3.10+ and isolated uv bootstrap
+  launchers.
+- Added CI coverage for the `ielts` source-checkout command installer on all
+  three operating systems while retaining the established package entry point
+  for seamless updates from earlier releases.
+
+### Changed
+
+- Redrew the one-tile trainer around the terminal renderer's 2-by-4 Braille
+  micro-cell boundaries, preserving a vivid red cap, cream face and eye, blue
+  coat, yellow satchel, and dark silhouette after pixel compression.
+- Recoloured the built-in dog with a dark keyline and saturated orange-and-cream
+  body so the companion remains distinct on both grass and pale paths.
+- Preserved the 14-by-8 field of view, fog, minimap, and animation cadence while
+  increasing actor-versus-terrain contrast.
+- Updated command help and documentation to use the shorter Codex-style
+  `ielts` invocation.
+
 ## [0.6.5] - 2026-07-31
 
 ### Added
@@ -203,6 +227,7 @@ Initial public release.
 - Search across English words, Chinese meanings, and synonyms.
 - An MIT license and open-source contribution guide.
 
+[0.6.6]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.5...v0.6.6
 [0.6.5]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.4...v0.6.5
 [0.6.4]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.2...v0.6.3

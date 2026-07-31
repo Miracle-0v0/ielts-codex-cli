@@ -206,7 +206,13 @@ class GameProfileStore:
             bgm_enabled = payload.get("bgm_enabled", True)
             if not isinstance(bgm_enabled, bool):
                 raise GameStoreError("The BGM preference must be a boolean.")
-            return SavedPet.from_record(pet_record), bgm_enabled
+            saved_pet = SavedPet.from_record(pet_record)
+            if _is_builtin_pet(saved_pet):
+                # Built-in companions are project artwork rather than user
+                # creations. Refresh their palette on upgrade while preserving
+                # every API-generated pet exactly as the user saved it.
+                saved_pet = SavedPet(profile=DEFAULT_PET)
+            return saved_pet, bgm_enabled
         except GameStoreError:
             raise
         except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
@@ -1612,6 +1618,25 @@ def _migrate_v1_pet_record(value: object) -> object:
         migrated_profile.setdefault("sprite", list(DEFAULT_PET_SPRITE))
         migrated["profile"] = migrated_profile
     return migrated
+
+
+def _is_builtin_pet(pet: SavedPet) -> bool:
+    """Return whether a saved record is the bundled dog rather than user art."""
+
+    profile = pet.profile
+    return (
+        pet.image_sha256 is None
+        and pet.provider in {"offline", "unknown"}
+        and pet.model in {"built-in", "unknown"}
+        and profile.name == DEFAULT_PET.name
+        and profile.species == DEFAULT_PET.species
+        and profile.glyph == DEFAULT_PET.glyph
+        and profile.personality == DEFAULT_PET.personality
+        and profile.vision_bonus == DEFAULT_PET.vision_bonus
+        and profile.catchphrase == DEFAULT_PET.catchphrase
+        and profile.portrait == DEFAULT_PET.portrait
+        and profile.sprite == DEFAULT_PET.sprite
+    )
 
 
 def _safe_single_line(value: str) -> bool:

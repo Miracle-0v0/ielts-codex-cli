@@ -67,7 +67,7 @@ _JSON_FENCE_RE = re.compile(
     r"\A\s*```(?:json)?[ \t]*\r?\n(?P<body>.*?)\r?\n?```\s*\Z",
     re.IGNORECASE | re.DOTALL,
 )
-DEFAULT_PET_PALETTE = ("#493126", "#C9834D", "#FFE0A3")
+DEFAULT_PET_PALETTE = ("#2B1720", "#FF8700", "#FFFFD7")
 DEFAULT_PET_SPRITE = (
     "11....11",
     "1221..21",

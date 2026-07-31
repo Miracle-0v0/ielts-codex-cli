@@ -35,7 +35,7 @@ learning interface is Chinese-first.
 - English, Chinese, and synonym search
 - Manual Open English WordNet 2025 English-definition updates
 - Safe checks for newer stable releases from the official GitHub repository
-- Original pocket-adventure pixel spelling game with complete animated characters
+- Original pocket-adventure pixel spelling game with high-contrast animated characters
 - Optional, locally generated 8-bit BGM with a safe silent fallback
 - Optional image-inspired pet creation through a bring-your-own-key vision API
 - Zero runtime dependencies
@@ -50,26 +50,59 @@ already available.
 The fallback requires an internet connection and an explicit interactive `y`.
 It keeps the uv executable, managed interpreter, and download cache under the
 ignored `.ielts-bootstrap` directory. It never invokes APT or another system
-package manager, needs no `sudo`, does not replace the system Python, and does
-not edit shell profiles or `PATH`. Later launches reuse that local Python.
+package manager, needs no `sudo`, and does not replace the system Python. Later
+launches reuse that local Python.
 
-### Windows Command Prompt
+### Install the `ielts` command on Windows
 
 ```bat
 git clone https://github.com/Miracle-0v0/ielts-codex-cli.git
 cd ielts-codex-cli
-run.bat
+install.bat
 ```
 
-From PowerShell, use `.\run.bat`. Do not use `./run.sh` in Windows Command
-Prompt: `.sh` is a Bash script format and `cmd.exe` cannot execute it.
+From PowerShell, run `.\install.bat`. The installer adds
+`%LOCALAPPDATA%\IELTS Codex\bin` to the current user's `PATH`. Open a new
+Command Prompt, PowerShell, or Windows Terminal tab, then launch the interface:
 
-### Ubuntu, other Linux distributions, and macOS
+```bat
+ielts
+```
+
+Do not use `./run.sh` in Windows Command Prompt: `.sh` is a Bash script format
+and `cmd.exe` cannot execute it.
+
+### Install the `ielts` command on Ubuntu or macOS
 
 ```bash
 git clone https://github.com/Miracle-0v0/ielts-codex-cli.git
 cd ielts-codex-cli
+./install.sh
+```
+
+The installer creates `~/.local/bin/ielts` and, when necessary, adds that
+directory to the current shell's user profile. Open a new terminal, then run:
+
+```bash
+ielts
+```
+
+Both installers are user-level, require no administrator privileges, and make
+the command follow this source checkout. Keep the cloned directory in place;
+`/update` can then safely fast-forward it to later official releases.
+
+### Portable launch without installing a command
+
+The original launchers remain available and do not add a command to `PATH`:
+
+```bash
+# Ubuntu, other Linux distributions, and macOS
 ./run.sh
+```
+
+```bat
+rem Windows Command Prompt; use .\run.bat from PowerShell
+run.bat
 ```
 
 Both launchers are safe to use from a path containing spaces. To use a
@@ -93,10 +126,11 @@ run.bat
 Direct `python ielts.py` launches still work with Python 3.10+, and explain the
 version requirement clearly when an older interpreter is used.
 
-You can also install the `ielts-codex` command:
+If Python 3.10+ is already available, a normal Python package installation
+continues to provide the established `ielts-codex` command. Use the source
+installer above when you want the shorter `ielts` command:
 
 ```bash
-# Use any Python 3.10+ executable available on your system.
 python -m pip install .
 ielts-codex
 ```
@@ -165,8 +199,8 @@ card as `Again`. Use `h` for a hint, `s` to skip, or `q` to stop.
 
 ## Pocket pixel game mode
 
-The `0.6` development branch evolves the survival expedition into an original
-handheld monster-adventure-style terminal game:
+The game mode evolves the survival expedition into an original handheld
+monster-adventure-style terminal game:
 
 ```text
 › /game
@@ -272,7 +306,7 @@ export IELTS_CODEX_GAME_PROVIDER=kimi
 export IELTS_CODEX_GAME_MODEL='<vision-capable-model-id>'
 read -rsp 'API key: ' IELTS_CODEX_GAME_API_KEY
 export IELTS_CODEX_GAME_API_KEY
-ielts-codex
+ielts
 ```
 
 Then run:
@@ -367,10 +401,10 @@ Codex release published by the official GitHub repository:
 The same operation is available without entering the interactive prompt:
 
 ```bash
-ielts-codex update
-ielts-codex update status
-ielts-codex update --dry-run
-ielts-codex update --force
+ielts update
+ielts update status
+ielts update --dry-run
+ielts update --force
 # From a source checkout:
 python3 ielts.py update
 ```
@@ -397,7 +431,7 @@ targets are refused so an update cannot land in the wrong environment. Windows
 pip installations show the manual release path because the running console
 launcher may be locked. Unsupported, editable, dirty, or forked installations
 are refused before files change. If pip reports an installation failure,
-restart, check `ielts-codex --version`, and reinstall the official wheel
+restart, check `ielts --version`, and reinstall the official wheel
 manually if needed. A successful application update requires restarting IELTS
 Codex.
 

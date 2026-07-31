@@ -81,15 +81,11 @@ _MINIMAP_VISIBLE_WALL: Final = 28
 _MINIMAP_PLAYER: Final = 196
 _MINIMAP_PET: Final = 221
 _MINIMAP_MONSTER: Final = 147
+_PLAYER_OUTLINE: Final = 16
 _PLAYER_CAP: Final = 196
-_PLAYER_CAP_LIGHT: Final = 203
-_PLAYER_SKIN: Final = 223
-_PLAYER_HAIR: Final = 94
-_PLAYER_JACKET: Final = 27
-_PLAYER_JACKET_LIGHT: Final = 39
-_PLAYER_PACK: Final = 94
-_PLAYER_LEGS: Final = 67
-_PLAYER_BOOTS: Final = 236
+_PLAYER_FACE: Final = 230
+_PLAYER_COAT: Final = 33
+_PLAYER_SATCHEL: Final = 226
 _MONSTER_BODY: Final = 99
 _MONSTER_BODY_LIGHT: Final = 147
 _MONSTER_OUTLINE: Final = 54
@@ -507,38 +503,39 @@ def _minimap_panel_line(content: str) -> str:
 
 
 _PLAYER_FRAMES: Final[tuple[SpriteFrame, ...]] = (
+    # These original side-facing trainer frames deliberately align their
+    # signature colours to the renderer's 2-by-4 Braille micro-cells.  The red
+    # cap, cream face and eye, blue coat, yellow satchel, and dark keyline
+    # therefore survive terminal compression instead of averaging into the
+    # grass or path underneath them.
     (
-        "...RR...",
-        "..rRRR..",
-        "..HSSH..",
-        "..HSSH..",
-        "...JJ...",
-        "..JjBJ..",
-        "..L.L...",
-        ".K...K..",
+        "...ROO..",
+        ".ORRSSO.",
+        ".ORRSOO.",
+        ".O.RSSO.",
+        ".OJJAAO.",
+        ".OJJ.AO.",
+        ".OJ.A.O.",
+        ".O.J.AO.",
     ),
     (
-        "...RR...",
-        "..rRRR..",
-        "..HSSH..",
-        "..HSSH..",
-        "...JJ...",
-        "..JjBJ..",
-        ".L...L..",
-        "K.....K.",
+        "...ROO..",
+        ".ORRSSO.",
+        ".ORRSOO.",
+        ".O.RSSO.",
+        ".OJJAAO.",
+        ".OJJ.AO.",
+        ".O.J.AO.",
+        ".OJ.A.O.",
     ),
 )
 
 _PLAYER_PALETTE: Final[Mapping[str, int]] = {
+    "O": _PLAYER_OUTLINE,
     "R": _PLAYER_CAP,
-    "r": _PLAYER_CAP_LIGHT,
-    "S": _PLAYER_SKIN,
-    "H": _PLAYER_HAIR,
-    "J": _PLAYER_JACKET,
-    "j": _PLAYER_JACKET_LIGHT,
-    "B": _PLAYER_PACK,
-    "L": _PLAYER_LEGS,
-    "K": _PLAYER_BOOTS,
+    "S": _PLAYER_FACE,
+    "J": _PLAYER_COAT,
+    "A": _PLAYER_SATCHEL,
 }
 
 _LETTER_BITMAPS: Final[Mapping[str, tuple[str, ...]]] = {
@@ -1022,15 +1019,11 @@ _MONO_LIT: Final[frozenset[int]] = frozenset(
         _MINIMAP_PLAYER,
         _MINIMAP_PET,
         _MINIMAP_MONSTER,
+        _PLAYER_OUTLINE,
         _PLAYER_CAP,
-        _PLAYER_CAP_LIGHT,
-        _PLAYER_SKIN,
-        _PLAYER_HAIR,
-        _PLAYER_JACKET,
-        _PLAYER_JACKET_LIGHT,
-        _PLAYER_PACK,
-        _PLAYER_LEGS,
-        _PLAYER_BOOTS,
+        _PLAYER_FACE,
+        _PLAYER_COAT,
+        _PLAYER_SATCHEL,
         _MONSTER_OUTLINE,
         _MONSTER_LETTER,
         16,
