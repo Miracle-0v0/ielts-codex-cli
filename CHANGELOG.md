@@ -2,6 +2,26 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.3.2] - Unreleased
+
+### Added
+
+- Added an explicit `/update` command that independently refreshes Open English
+  WordNet definitions and checks the official GitHub repository for a newer
+  stable IELTS Codex release.
+- Added safe source-checkout fast-forward updates and digest-verified
+  pure-Python wheel updates with downgrade and prerelease protection.
+- Added an offline `/update status` view and online `--dry-run` support.
+
+### Changed
+
+- Removed the network prompt from startup; launching IELTS Codex is now always
+  offline unless the user explicitly runs `/update`.
+- Kept the legacy `/sync` route for existing scripts while removing it from the
+  command palette, help, and user-facing documentation.
+- Preserved project-maintained Chinese meanings when OEWN English definitions
+  are refreshed.
+
 ## [0.3.1] - 2026-07-30
 
 ### Changed
@@ -42,6 +62,7 @@ Initial public release.
 - Search across English words, Chinese meanings, and synonyms.
 - An MIT license and open-source contribution guide.
 
+[0.3.2]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Miracle-0v0/ielts-codex-cli/releases/tag/v0.2.0

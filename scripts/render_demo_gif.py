@@ -3,8 +3,8 @@
 
 The recorder is deliberately separate from the package's runtime dependencies.
 It uses a pseudo-terminal so every panel, prompt, answer, and status message in
-the GIF comes from the actual application.  The session stays offline and uses
-a one-entry, CC BY 4.0 OEWN overlay fixture for the synchronization screens.
+the GIF comes from the actual application. The session stays offline and uses
+a one-entry, CC BY 4.0 OEWN overlay fixture for the local update-status screen.
 
 Development requirements:
 
@@ -336,7 +336,7 @@ def _render_frame(
         draw.ellipse((x - 6, 16, x + 6, 28), fill=color)
     draw.text(
         (width // 2, 22),
-        "ielts-codex 0.3.1  ·  real CLI session",
+        "ielts-codex 0.3.2  ·  real CLI session",
         font=latin_bold_font,
         fill=(210, 214, 220),
         anchor="mm",
@@ -667,66 +667,60 @@ def _record_session(
             echo=False,
         )
 
-        caption = "1 · Choose whether to update OEWN on startup"
+        caption = "1 · Start offline with today's learning dashboard"
         animation.output(_read_expect(child, "› "), caption)
         animation.hold(caption, 5)
 
-        animation.type_command("n", caption)
-        child.sendline("n")
-        caption = "2 · Stay offline and open today's learning dashboard"
-        animation.output(_read_expect(child, "› "), caption)
-        animation.hold(caption, 5)
-
-        caption = "3 · Start a focused environment vocabulary card"
+        caption = "2 · Start a focused environment vocabulary card"
         child.sendline("/learn 1 environment")
         animation.output(_read_expect(child, "q 结束  › "), caption)
         animation.hold(caption, 5)
 
-        caption = "4 · Reveal bilingual details and OEWN attribution"
+        caption = "3 · Reveal bilingual details and OEWN attribution"
         animation.press_enter(caption)
         child.sendline("")
         animation.output(_read_expect(child, "评价记忆程度 › "), caption)
         animation.hold(caption, 8)
 
-        caption = "5 · Rate recall for adaptive spaced repetition"
+        caption = "4 · Rate recall for adaptive spaced repetition"
         animation.type_command("3", caption)
         child.sendline("3")
         animation.output(_read_expect(child, "› "), caption)
         animation.hold(caption, 6)
 
-        caption = "6 · Spell the word from its Chinese definition"
+        caption = "5 · Spell the word from its Chinese definition"
         child.sendline("/quiz 1 environment")
         animation.output(_read_expect(child, "answer › "), caption)
         animation.hold(caption, 6)
 
-        caption = "7 · Get immediate spelling feedback"
+        caption = "6 · Get immediate spelling feedback"
         animation.type_command("conservation", caption)
         child.sendline("conservation")
         animation.output(_read_expect(child, "› "), caption)
         animation.hold(caption, 6)
 
-        caption = "8 · Search any word for its complete learning card"
+        caption = "7 · Search any word for its complete learning card"
         child.sendline("conservation")
         search_output = _read_expect(child, "来源")
         search_output += _read_expect(child, "› ")
         animation.output(search_output, caption)
         animation.hold(caption, 8)
 
-        caption = "9 · Review learning progress and accuracy"
+        caption = "8 · Review learning progress and accuracy"
         child.sendline("/stats")
         stats_output = _read_expect(child, "累计动作")
         stats_output += _read_expect(child, "› ")
         animation.output(stats_output, caption)
         animation.hold(caption, 7)
 
-        caption = "10 · Inspect the local OEWN synchronization status"
-        child.sendline("/sync status")
-        sync_output = _read_expect(child, "位置")
-        sync_output += _read_expect(child, "› ")
-        animation.output(sync_output, caption)
+        caption = "9 · Inspect application and OEWN status without networking"
+        child.sendline("/update status")
+        update_output = _read_expect(child, "联网")
+        update_output += _read_expect(child, "› ")
+        animation.output(update_output, caption)
         animation.hold(caption, 8)
 
-        caption = "11 · Quit — progress is saved locally"
+        caption = "10 · Quit — progress is saved locally"
         child.sendline("/quit")
         animation.output(_read_expect(child, pexpect.EOF), caption)
         animation.hold(caption, 8)

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ielts-codex"
-version = "0.3.1"
+version = "0.3.2"
 description = "A Codex-inspired, zero-dependency IELTS vocabulary trainer for the terminal."
 readme = "README.md"
 requires-python = ">=3.10"

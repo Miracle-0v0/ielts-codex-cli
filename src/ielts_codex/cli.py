@@ -17,6 +17,7 @@ from .models import Rating, Word
 from .oewn import OEWNSyncError, OEWNSynchronizer, load_overlay
 from .storage import ProgressFileError, ProgressStore
 from .ui import TerminalUI
+from .updater import ProjectUpdateError, ProjectUpdater
 from .word_bank import WordBank
 
 
@@ -43,7 +44,7 @@ SLASH_COMMANDS = (
     ("/today", "查看今日计划"),
     ("/stats", "查看学习统计"),
     ("/goal", "修改每日目标"),
-    ("/sync", "更新英文释义"),
+    ("/update", "更新知识库与程序"),
     ("/clear", "清屏"),
     ("/help", "查看命令帮助"),
     ("/quit", "保存并退出"),
@@ -67,20 +68,22 @@ class IELTSApp:
         *,
         rng: random.Random | None = None,
         synchronizer: OEWNSynchronizer | None = None,
+        project_updater: ProjectUpdater | None = None,
     ) -> None:
         self.bank = bank
         self.store = store
         self.ui = ui
         self.rng = rng or random.Random()
         self.synchronizer = synchronizer or OEWNSynchronizer()
+        self.project_updater = project_updater or ProjectUpdater()
+        self._restart_required_version: str | None = None
         self.running = True
 
     def run(self) -> int:
         self.ui.banner()
-        self.offer_startup_sync()
         self.show_today(compact=True)
         self.ui.hint(
-            "  输入 /learn 开始，/help 查看命令；直接输入单词可以查询。"
+            "  输入 /learn 开始，/update 手动联网更新，/help 查看命令。"
         )
         self.ui.write()
 
@@ -135,6 +138,9 @@ class IELTSApp:
             "stats": self._command_stats,
             "today": self._command_today,
             "goal": self._command_goal,
+            "update": self._command_update,
+            # Kept for scripts written before 0.3.2; intentionally omitted
+            # from the slash palette and help.
             "sync": self._command_sync,
             "help": self._command_help,
             "clear": self._command_clear,
@@ -179,6 +185,18 @@ class IELTSApp:
                 self.ui.error("search 需要一个单词或中文释义。")
                 return 2
             self.search(query)
+        elif command == "update":
+            if query is None:
+                return int(
+                    not self.update_all(force=force, dry_run=dry_run)
+                )
+            if query.lower() == "status" and not force and not dry_run:
+                self.show_update_status()
+            else:
+                self.ui.error(
+                    "用法：ielts-codex update [status] [--force] [--dry-run]"
+                )
+                return 2
         elif command == "sync":
             if query is None:
                 return int(
@@ -239,6 +257,20 @@ class IELTSApp:
             return
         self.ui.success(f"每日目标已设为 {self.store.daily_goal} 个复习动作。")
 
+    def _command_update(self, args: list[str]) -> None:
+        if args == ["status"]:
+            self.show_update_status()
+            return
+        allowed = {"--force", "--dry-run"}
+        unknown = [arg for arg in args if arg not in allowed]
+        if unknown:
+            self.ui.warning("用法：/update [status] [--force] [--dry-run]")
+            return
+        self.update_all(
+            force="--force" in args,
+            dry_run="--dry-run" in args,
+        )
+
     def _command_sync(self, args: list[str]) -> None:
         if args == ["status"]:
             self.show_sync_status()
@@ -263,32 +295,6 @@ class IELTSApp:
     def _command_quit(self, _args: list[str]) -> None:
         self.running = False
 
-    def offer_startup_sync(self) -> None:
-        """Offer an explicit online update choice on every interactive start."""
-
-        version = self._local_oewn_version()
-        if version:
-            self.ui.hint(f"  Open English WordNet 本地版本：{version}")
-        else:
-            self.ui.hint("  Open English WordNet：尚未同步（使用内置英文释义）")
-
-        while True:
-            try:
-                answer = self.ui.prompt(
-                    "  是否联网检查并更新英文释义？ [y/N] › "
-                ).strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                self.ui.write()
-                self.ui.hint("  已跳过联网更新。")
-                return
-            if answer in {"", "n", "no", "否", "不"}:
-                self.ui.hint("  本次保持离线；可随时运行 /sync。")
-                return
-            if answer in {"y", "yes", "是", "好"}:
-                self.sync_vocabulary()
-                return
-            self.ui.hint("  请输入 y 联网更新，或按 Enter 保持离线。")
-
     def _local_oewn_version(self) -> str | None:
         path = self.store.oewn_overlay_path
         if not path.exists():
@@ -300,6 +306,127 @@ class IELTSApp:
             return None
         return str(payload["provider"].get("version", "未知"))
 
+    def update_all(
+        self,
+        *,
+        force: bool = False,
+        dry_run: bool = False,
+    ) -> bool:
+        """Run the vocabulary and application updates independently."""
+
+        vocabulary_ok = self.sync_vocabulary(
+            force=force,
+            dry_run=dry_run,
+        )
+        project_ok = self.update_project(dry_run=dry_run)
+        self.ui.write()
+        if vocabulary_ok and project_ok:
+            action = "预览完成" if dry_run else "更新检查完成"
+            self.ui.success(f"{action}；知识库与程序两项均已处理。")
+        else:
+            self.ui.warning(
+                "更新仅部分完成；失败项目未阻断另一项。"
+            )
+        return vocabulary_ok and project_ok
+
+    def update_project(self, *, dry_run: bool = False) -> bool:
+        """Check and safely install the latest stable GitHub release."""
+
+        if self._restart_required_version is not None:
+            self.ui.success(
+                "程序已在本次会话更新至 "
+                f"{self._restart_required_version}；请先退出并重新启动。"
+            )
+            return True
+
+        mode = "预览更新" if dry_run else "检查更新"
+        self.ui.write()
+        self.ui.rule(f"update · IELTS Codex · {mode}")
+        self.ui.hint("正在读取官方 GitHub stable release；不会安装测试版本或降级…")
+        try:
+            result = self.project_updater.update(dry_run=dry_run)
+        except (ProjectUpdateError, OSError) as exc:
+            self.ui.error(f"程序更新失败：{exc}")
+            self.ui.hint(
+                "当前进程仍运行原版本；请重启后用 --version 确认安装状态。"
+            )
+            self.ui.hint("知识库更新结果不受影响。")
+            return False
+
+        if result.status == "updated":
+            self._restart_required_version = result.latest_version
+            self.ui.panel(
+                "application update complete",
+                [
+                    f"版本      {result.current_version} → {result.latest_version}",
+                    f"安装方式  {result.install_kind}",
+                    f"发布页    {result.release_url}",
+                ],
+            )
+            self.ui.success("程序已安全更新；退出并重新启动后使用新版本。")
+            return True
+        if result.status == "up_to_date":
+            self.ui.success(
+                f"程序已是最新 stable 版本：IELTS Codex {result.latest_version}"
+            )
+            return True
+        if result.status == "ahead":
+            self.ui.success(
+                f"本地版本 {result.current_version} 高于 GitHub stable "
+                f"{result.latest_version}；不会降级。"
+            )
+            return True
+        if result.status == "available":
+            self.ui.panel(
+                "application update preview",
+                [
+                    f"当前      {result.current_version}",
+                    f"可更新    {result.latest_version}",
+                    f"安装方式  {result.install_kind}",
+                    "结果      仅预览，未修改程序文件",
+                    f"发布页    {result.release_url}",
+                ],
+            )
+            return True
+
+        self.ui.warning(result.message)
+        if result.release_url:
+            self.ui.hint(f"可手动安装官方 release：{result.release_url}")
+        return False
+
+    def show_update_status(self) -> None:
+        """Show local application and OEWN state without network access."""
+
+        try:
+            target = self.project_updater.detect_install()
+            install_detail = target.detail
+        except (ProjectUpdateError, OSError) as exc:
+            install_detail = f"无法识别（{exc}）"
+
+        version = self._local_oewn_version()
+        overlay_path = self.store.oewn_overlay_path
+        vocabulary_status = (
+            f"Open English WordNet {version}"
+            if version
+            else "内置英文释义（OEWN 尚未同步）"
+        )
+        application_status = f"IELTS Codex {self.project_updater.current_version}"
+        if self._restart_required_version is not None:
+            application_status += (
+                f" → {self._restart_required_version}（等待重启）"
+            )
+        self.ui.panel(
+            "update status · local only",
+            [
+                f"程序      {application_status}",
+                f"安装      {install_detail}",
+                f"知识库    {vocabulary_status}",
+                f"覆盖文件  {overlay_path}",
+                "联网      未检查；/update status 始终保持离线",
+                "更新      运行 /update 后才会连接官方发布源",
+            ],
+        )
+
     def sync_vocabulary(
         self,
         *,
@@ -310,7 +437,7 @@ class IELTSApp:
 
         mode = "预览更新" if dry_run else "检查更新"
         self.ui.write()
-        self.ui.rule(f"sync · Open English WordNet · {mode}")
+        self.ui.rule(f"update · Open English WordNet · {mode}")
         self.ui.hint("正在读取官方发布信息；中文释义和学习进度不会被修改…")
         try:
             curated_words = WordBank.bundled().words
@@ -367,7 +494,7 @@ class IELTSApp:
                 [
                     "状态      尚未同步 Open English WordNet",
                     "当前      使用随项目发布的英文释义",
-                    "更新      运行 /sync，或在下次启动时选择 y",
+                    "更新      运行 /update",
                     f"位置      {path}",
                 ],
             )
@@ -376,7 +503,7 @@ class IELTSApp:
             payload = load_overlay(path)
         except OEWNSyncError as exc:
             self.ui.error(f"本地 OEWN 覆盖不可读：{exc}")
-            self.ui.hint("运行 /sync --force 可重新下载；基础词库仍可使用。")
+            self.ui.hint("运行 /update --force 可重新下载；基础词库仍可使用。")
             return
         provider = payload["provider"]
         entries = payload["entries"]
@@ -755,7 +882,7 @@ class IELTSApp:
                 "/today                  查看今天的学习计划",
                 "/stats                  查看累计学习数据",
                 "/goal <数量>            修改每日目标",
-                "/sync [status]           同步/查看 Open English WordNet 英文释义",
+                "/update [status]         更新知识库与 GitHub stable 程序版本",
                 "/clear                  清屏",
                 "/quit                   保存并退出",
                 "",
@@ -775,22 +902,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=(
-            "learn",
-            "review",
-            "quiz",
-            "stats",
-            "today",
-            "topics",
-            "search",
-            "sync",
+        metavar="command",
+        help=(
+            "直接执行 learn/review/quiz/search/stats/topics/today/update；"
+            "省略则进入交互模式"
         ),
-        help="直接执行一个命令；省略则进入交互模式",
     )
     parser.add_argument(
         "query",
         nargs="?",
-        help="search 的查询内容，或 sync 的 status",
+        help="search 的查询内容，或 update 的 status",
     )
     parser.add_argument("-n", "--count", type=int, default=DEFAULT_SESSION_SIZE)
     parser.add_argument("-t", "--topic", help="限定 IELTS 主题")
@@ -807,12 +928,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="sync 时即使版本相同也重新下载",
+        help="update 时即使 OEWN 版本相同也重新下载",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="sync 时预览更新但不写入",
+        help="update 时预览知识库与程序更新但不写入",
     )
     parser.add_argument("--seed", type=int, help=argparse.SUPPRESS)
     parser.add_argument(
@@ -826,10 +947,24 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    direct_commands = {
+        "learn",
+        "review",
+        "quiz",
+        "stats",
+        "today",
+        "topics",
+        "search",
+        "update",
+        # Backward-compatible but intentionally absent from --help.
+        "sync",
+    }
+    if args.command is not None and args.command not in direct_commands:
+        parser.error(f"未知命令：{args.command}")
     if not 1 <= args.count <= 100:
         parser.error("--count 须在 1 到 100 之间")
-    if (args.force or args.dry_run) and args.command != "sync":
-        parser.error("--force 和 --dry-run 仅适用于 sync 命令")
+    if (args.force or args.dry_run) and args.command not in {"update", "sync"}:
+        parser.error("--force 和 --dry-run 仅适用于 update 命令")
     topic = IELTSApp._normalize_topic(args.topic) if args.topic else None
 
     ui = TerminalUI(color=False if args.no_color else None)

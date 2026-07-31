@@ -8,9 +8,11 @@ commands, focused word cards, spelling practice, instant feedback, spaced
 repetition, and local progress tracking.
 
 IELTS Codex uses only the Python standard library. The core trainer works
-offline and requires no account, API key, or runtime dependency. An optional,
-user-approved sync can refresh English definitions from Open English WordNet
-(OEWN). The current learning interface is Chinese-first.
+offline and requires no account, API key, or runtime dependency. The explicit
+`/update` command can refresh English definitions from Open English WordNet
+(OEWN) and install a newer stable IELTS Codex release from the official GitHub
+repository. Ordinary startup never makes a network request. The current
+learning interface is Chinese-first.
 
 > [!NOTE]
 > This is an independent open-source learning tool. It is not an official
@@ -31,7 +33,8 @@ user-approved sync can refresh English definitions from Open English WordNet
 - Local, atomic JSON progress storage
 - Daily goals, streaks, accuracy, and mastery statistics
 - English, Chinese, and synonym search
-- Optional Open English WordNet 2025 English-definition sync
+- Manual Open English WordNet 2025 English-definition updates
+- Safe checks for newer stable releases from the official GitHub repository
 - Zero runtime dependencies
 
 ## Quick start
@@ -64,7 +67,7 @@ ielts-codex
 | `/today` | Show today's plan and goal |
 | `/stats` | Show coverage, accuracy, streak, and mastery |
 | `/goal <count>` | Change the daily review goal |
-| `/sync [status] [--force] [--dry-run]` | Sync OEWN definitions or inspect the local cache |
+| `/update [status] [--force] [--dry-run]` | Update OEWN definitions and IELTS Codex |
 | `/clear` | Clear the terminal |
 | `/quit` | Save and exit |
 
@@ -117,7 +120,8 @@ python3 ielts.py topics
 python3 ielts.py search biodiversity
 python3 ielts.py learn -n 5 -t environment
 python3 ielts.py --no-color stats
-python3 ielts.py sync
+python3 ielts.py update
+python3 ielts.py update status
 ```
 
 ## Vocabulary data and provenance
@@ -144,34 +148,63 @@ Each entry contains:
 - `topic`
 - `band`
 
-### Optional Open English WordNet sync
+### Manual updates and Open English WordNet
 
-Every interactive launch offers a choice to connect to the internet and check
-for the latest [Open English WordNet](https://en-word.net/) release. Declining
-continues offline without making a network request. You can also start a sync
-explicitly:
+IELTS Codex never checks the network during ordinary startup. Run `/update`
+when you choose to connect. The command independently checks the latest
+[Open English WordNet](https://en-word.net/) data and the highest stable IELTS
+Codex release published by the official GitHub repository:
 
 ```text
-› /sync
-› /sync status
-› /sync --dry-run
+› /update
+› /update status
+› /update --dry-run
+› /update --force
 ```
 
-Or run the same operation without entering the interactive prompt:
+The same operation is available without entering the interactive prompt:
 
 ```bash
-ielts-codex sync
-ielts-codex sync status
-ielts-codex sync --force
+ielts-codex update
+ielts-codex update status
+ielts-codex update --dry-run
+ielts-codex update --force
 # From a source checkout:
-python3 ielts.py sync
+python3 ielts.py update
 ```
 
-`status` reads only the local overlay metadata. `--dry-run` previews a proposed
-overlay without writing it, while `--force` re-downloads the release even when
-the cached version is current; the flags may be combined.
+`status` is strictly offline: it reads only the running application version,
+installation type, and local OEWN overlay metadata. `--dry-run` performs the
+online checks and may process an OEWN download in a temporary directory, but
+does not modify the overlay, source checkout, or installed package. `--force`
+re-downloads OEWN even when its cached version is current; it never forces an
+application downgrade or reinstall. The flags may be combined.
 
-The sync discovers the current OEWN release from its official GitHub release
+The two update jobs are isolated. If OEWN is temporarily unavailable, the
+application check still runs; if the application cannot be updated safely, a
+valid OEWN update is retained.
+
+Application updates accept stable three-part versions only and never install a
+prerelease or downgrade. A source checkout is updated only when it is on
+`main`, has the official HTTPS origin, has a normal clean index, and can
+fast-forward to a release tag that belongs to official `main`. A pip-managed
+installation in the current interpreter or user site requires an exact
+pure-Python wheel whose size, GitHub-provided SHA-256 digest, paths, metadata,
+and internal `RECORD` hashes all validate before installation. Custom pip
+targets are refused so an update cannot land in the wrong environment. Windows
+pip installations show the manual release path because the running console
+launcher may be locked. Unsupported, editable, dirty, or forked installations
+are refused before files change. If pip reports an installation failure,
+restart, check `ielts-codex --version`, and reinstall the official wheel
+manually if needed. A successful application update requires restarting IELTS
+Codex.
+
+The updater's release trust boundary is GitHub TLS, the official
+`Miracle-0v0/ielts-codex-cli` repository, and GitHub's release-asset digest.
+That digest detects corruption and asset substitution after metadata retrieval;
+it is not an independent maintainer signature.
+
+The OEWN job discovers the current release from its official GitHub release
 metadata and downloads the verified standard JSON release asset (with the
 official `en-word.net` URL supported for legacy releases). It creates a local
 overlay for matching bundled words; it never rewrites
@@ -180,8 +213,8 @@ overlay for matching bundled words; it never rewrites
 Only `definition_en` and its source/license metadata are overlaid. The
 project-maintained Chinese meaning and example, English example, phonetic
 transcription, part of speech, topic, band, and synonyms remain unchanged. A
-sync therefore refreshes the English definition without discarding the
-human-curated learning context.
+knowledge-base update therefore refreshes the English definition without
+discarding the human-curated learning context.
 
 The overlay cache is stored next to the progress file:
 

@@ -1,7 +1,7 @@
 """Open English WordNet release discovery and vocabulary synchronization.
 
-OEWN content is downloaded only when the user explicitly runs the sync
-command. Synced definitions are stored in a local overlay under CC BY 4.0;
+OEWN content is downloaded only when the user explicitly runs ``/update``.
+Synced definitions are stored in a local overlay under CC BY 4.0;
 the bundled, MIT-licensed vocabulary file is never rewritten.
 """
 

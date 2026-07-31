@@ -6,7 +6,7 @@ is not relicensed under the IELTS Codex MIT License.
 
 ## Open English WordNet 2025
 
-The optional `/sync` command uses the standard JSON release of:
+The optional `/update` command uses the standard JSON release of:
 
 - **Resource:** Open English WordNet 2025 Edition
 - **Source:** <https://en-word.net/>
@@ -20,7 +20,8 @@ Open English WordNet is derived from Princeton WordNet by the Open English
 WordNet Community. Use of its content requires attribution to both Princeton
 WordNet and the Open English WordNet team.
 
-IELTS Codex downloads the upstream release only after the user chooses to sync.
+IELTS Codex downloads the upstream release only after the user explicitly runs
+`/update`; ordinary startup remains offline.
 It selects a matching sense for words already present in the bundled IELTS
 vocabulary and stores the selected English definitions in a local JSON overlay.
 This is an extraction and transformation of the upstream resource. IELTS Codex
