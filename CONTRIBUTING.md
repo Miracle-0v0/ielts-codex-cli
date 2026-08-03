@@ -31,6 +31,7 @@ Run the local checks:
 python3 -m py_compile src/ielts_codex/*.py
 ./run.sh --version
 python3 -m pip install .
+ielts --version
 ielts-codex --version
 ```
 

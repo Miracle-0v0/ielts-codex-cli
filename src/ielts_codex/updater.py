@@ -84,6 +84,7 @@ RUNTIME_PACKAGE_PATHS = frozenset(
         "ielts_codex/storage.py",
         "ielts_codex/ui.py",
         "ielts_codex/updater.py",
+        "ielts_codex/windows_updater.py",
         "ielts_codex/word_bank.py",
         "ielts_codex/data/__init__.py",
         "ielts_codex/data/words.json",
@@ -119,6 +120,7 @@ class InstallTarget:
 class ProjectUpdateResult:
     status: Literal[
         "updated",
+        "staged",
         "up_to_date",
         "ahead",
         "available",
@@ -130,6 +132,7 @@ class ProjectUpdateResult:
     restart_required: bool = False
     message: str = ""
     release_url: str = ""
+    completion_command: str = ""
 
 
 def parse_version(value: str) -> tuple[int, int, int]:
@@ -303,6 +306,7 @@ class ProjectUpdater:
         runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
         module_file: Path | str | None = None,
         executable: Path | str | None = None,
+        update_root: Path | str | None = None,
         distribution_getter: Callable[[str], Any] | None = None,
     ) -> None:
         self.current_version = current_version
@@ -316,6 +320,16 @@ class ProjectUpdater:
         self._runner = runner or subprocess.run
         self.module_file = Path(module_file or __file__).resolve()
         self.executable = str(executable or sys.executable)
+        if update_root is None:
+            data_root = os.environ.get("IELTS_CODEX_HOME")
+            base = (
+                Path(data_root).expanduser()
+                if data_root
+                else Path.home() / ".ielts-codex"
+            )
+            self.update_root = base / "update"
+        else:
+            self.update_root = Path(update_root).expanduser()
         self._distribution_getter = (
             distribution_getter or importlib.metadata.distribution
         )
@@ -499,12 +513,6 @@ class ProjectUpdater:
                 None,
                 "custom pip target cannot be updated in place safely",
             )
-        if os.name == "nt":
-            return InstallTarget(
-                "unsupported",
-                None,
-                "Windows pip updates must run after the CLI has exited",
-            )
         scheme_variables = (
             "PYTHONHOME",
             "PYTHONPLATLIBDIR",
@@ -585,11 +593,12 @@ class ProjectUpdater:
                 **common,
             )
 
+        completion_command: Path | None = None
         try:
             if target.kind == "source" and target.root is not None:
                 self._update_source(target.root, release)
             elif target.kind == "pip" and target.root is not None:
-                self._update_pip(release, target)
+                completion_command = self._update_pip(release, target)
             else:  # Defensive guard for future target kinds.
                 raise ProjectUpdateError("Unsupported project installation.")
         except ProjectUpdateError:
@@ -598,6 +607,16 @@ class ProjectUpdater:
             raise ProjectUpdateError(
                 f"The project update could not access the filesystem: {exc}"
             ) from exc
+        if completion_command is not None:
+            return ProjectUpdateResult(
+                "staged",
+                restart_required=True,
+                message=(
+                    "The verified update is ready to install after IELTS Codex exits."
+                ),
+                completion_command=str(completion_command),
+                **common,
+            )
         return ProjectUpdateResult(
             "updated",
             restart_required=True,
@@ -988,7 +1007,7 @@ class ProjectUpdater:
         self,
         release: ProjectRelease,
         target: InstallTarget,
-    ) -> None:
+    ) -> Path | None:
         if not all(
             (
                 release.wheel_name,
@@ -1002,8 +1021,148 @@ class ProjectUpdater:
             )
         if target.root is None:
             raise ProjectUpdateError("Cannot identify the pip installation.")
+        if self._platform_is_windows():
+            return self._stage_windows_pip_update(release, target)
         with self._pip_update_lock(target.root):
             self._install_pip_release(release, target)
+        return None
+
+    @staticmethod
+    def _platform_is_windows() -> bool:
+        return os.name == "nt"
+
+    def _stage_windows_pip_update(
+        self,
+        release: ProjectRelease,
+        target: InstallTarget,
+    ) -> Path:
+        """Persist a verified wheel for installation after the CLI exits."""
+
+        if target.root is None:
+            raise ProjectUpdateError("Cannot identify the pip installation.")
+        user_site = self._user_site_root()
+        user_install = user_site is not None and target.root == user_site
+        scripts_root = self._pip_scripts_root(user_install=user_install)
+        if scripts_root is None:
+            raise ProjectUpdateError(
+                "Cannot identify the pip scripts directory."
+            )
+
+        update_root = self.update_root
+        try:
+            if update_root.is_symlink():
+                raise ProjectUpdateError(
+                    "The Windows update directory must not be a symbolic link."
+                )
+            update_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+            if not update_root.is_dir():
+                raise ProjectUpdateError(
+                    "The Windows update path is not a directory."
+                )
+            update_root = update_root.resolve()
+        except ProjectUpdateError:
+            raise
+        except OSError as exc:
+            raise ProjectUpdateError(
+                f"Cannot prepare the Windows update directory: {exc}"
+            ) from exc
+
+        suffix = release.version.replace(".", "_")
+        helper_name = f"ielts_update_{suffix}.py"
+        manifest_name = f"pending-{release.version}.json"
+        command_path = update_root / "ielts-update.cmd"
+        helper_source = Path(__file__).with_name("windows_updater.py")
+        try:
+            helper_content = helper_source.read_bytes()
+        except OSError as exc:
+            raise ProjectUpdateError(
+                f"Cannot read the Windows update helper: {exc}"
+            ) from exc
+
+        try:
+            with tempfile.TemporaryDirectory(
+                prefix=".ielts-stage-",
+                dir=update_root,
+            ) as temporary:
+                temporary_root = Path(temporary)
+                wheel_path = self._download_wheel(release, temporary_root)
+                self._validate_wheel(wheel_path, release)
+                helper_path = temporary_root / helper_name
+                manifest_path = temporary_root / manifest_name
+                staged_command = temporary_root / "ielts-update.cmd"
+                helper_path.write_bytes(helper_content)
+                manifest_path.write_text(
+                    json.dumps(
+                        {
+                            "schema": 1,
+                            "version": release.version,
+                            "wheel": release.wheel_name,
+                            "sha256": release.wheel_sha256,
+                            "user_install": user_install,
+                            "package_root": str(target.root.resolve()),
+                            "scripts_root": str(scripts_root.resolve()),
+                            "wait_pid": os.getpid(),
+                        },
+                        ensure_ascii=True,
+                        indent=2,
+                        sort_keys=True,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                staged_command.write_text(
+                    self._windows_update_command(helper_name, manifest_name),
+                    encoding="utf-8",
+                    newline="",
+                )
+                for staged, destination in (
+                    (wheel_path, update_root / wheel_path.name),
+                    (helper_path, update_root / helper_name),
+                    (manifest_path, update_root / manifest_name),
+                    (staged_command, command_path),
+                ):
+                    os.replace(staged, destination)
+        except ProjectUpdateError:
+            raise
+        except OSError as exc:
+            raise ProjectUpdateError(
+                f"Cannot stage the Windows update: {exc}"
+            ) from exc
+        return command_path
+
+    def _windows_update_command(
+        self,
+        helper_name: str,
+        manifest_name: str,
+    ) -> str:
+        if any(
+            character in self.executable for character in ('"', "\r", "\n")
+        ):
+            raise ProjectUpdateError(
+                "The Python executable path cannot be represented safely "
+                "in cmd.exe."
+            )
+        executable = self.executable.replace("%", "%%")
+        lines = [
+            "@echo off",
+            "setlocal DisableDelayedExpansion",
+            "title IELTS Codex update",
+            "echo IELTS Codex post-exit update",
+            f'"{executable}" "%~dp0{helper_name}" "%~dp0{manifest_name}"',
+            'set "IELTS_CODEX_UPDATE_RESULT=%ERRORLEVEL%"',
+            "echo(",
+            'if "%IELTS_CODEX_UPDATE_RESULT%"=="0" goto success',
+            "echo Update failed. Close every IELTS Codex window, then run "
+            "this file again.",
+            "echo The verified wheel has been kept for a safe retry.",
+            "pause",
+            "exit /b %IELTS_CODEX_UPDATE_RESULT%",
+            ":success",
+            "echo Update complete. Open a new terminal and run: ielts --version",
+            "pause",
+            "exit /b 0",
+        ]
+        return "\r\n".join(lines) + "\r\n"
 
     def _install_pip_release(
         self,
@@ -1440,7 +1599,10 @@ class ProjectUpdater:
             parser.defaults()
             or parser.sections() != ["console_scripts"]
             or dict(parser.items("console_scripts"))
-            != {"ielts-codex": "ielts_codex.cli:main"}
+            != {
+                "ielts": "ielts_codex.cli:main",
+                "ielts-codex": "ielts_codex.cli:main",
+            }
         ):
             raise ProjectUpdateError(
                 "The project wheel entry points do not match IELTS Codex."

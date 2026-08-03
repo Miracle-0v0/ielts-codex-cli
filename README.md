@@ -129,12 +129,14 @@ Direct `python ielts.py` launches still work with Python 3.10+, and explain the
 version requirement clearly when an older interpreter is used.
 
 If Python 3.10+ is already available, a normal Python package installation
-continues to provide the established `ielts-codex` command. Use the source
-installer above when you want the shorter `ielts` command:
+provides the primary `ielts` command and the backward-compatible
+`ielts-codex` alias:
 
 ```bash
 python -m pip install .
-ielts-codex
+ielts
+# Existing scripts may continue to use:
+ielts-codex --version
 ```
 
 ## Interactive commands
@@ -458,13 +460,20 @@ fast-forward to a release tag that belongs to official `main`. A pip-managed
 installation in the current interpreter or user site requires an exact
 pure-Python wheel whose size, GitHub-provided SHA-256 digest, paths, metadata,
 and internal `RECORD` hashes all validate before installation. Custom pip
-targets are refused so an update cannot land in the wrong environment. Windows
-pip installations show the manual release path because the running console
-launcher may be locked. Unsupported, editable, dirty, or forked installations
-are refused before files change. If pip reports an installation failure,
-restart, check `ielts --version`, and reinstall the official wheel
-manually if needed. A successful application update requires restarting IELTS
-Codex.
+targets are refused so an update cannot land in the wrong environment.
+
+On Windows, `/update` never runs pip while the console launcher is active.
+Instead, it stores the validated wheel and a standalone installer under
+`%USERPROFILE%\.ielts-codex\update`, then prints the path to
+`ielts-update.cmd`. Exit every IELTS Codex window and double-click that script;
+it waits for the originating process to close, rechecks the wheel SHA-256,
+forces a retry-safe installation, and verifies both `ielts` and `ielts-codex`
+launchers. If external software interrupts pip, the staged wheel and script are
+kept so the update can be retried after all IELTS Codex windows are closed.
+
+Unsupported, editable, dirty, or forked installations are refused before files
+change. A successful application update requires restarting IELTS Codex and
+checking `ielts --version` in a new terminal.
 
 The updater's release trust boundary is GitHub TLS, the official
 `Miracle-0v0/ielts-codex-cli` repository, and GitHub's release-asset digest.

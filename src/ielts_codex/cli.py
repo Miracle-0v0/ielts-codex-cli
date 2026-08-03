@@ -82,8 +82,12 @@ class IELTSApp:
         self.ui = ui
         self.rng = rng or random.Random()
         self.synchronizer = synchronizer or OEWNSynchronizer()
-        self.project_updater = project_updater or ProjectUpdater()
+        self.project_updater = project_updater or ProjectUpdater(
+            update_root=store.data_dir / "update"
+        )
         self._restart_required_version: str | None = None
+        self._pending_update_version: str | None = None
+        self._pending_update_command: str | None = None
         self.game_mode = GameMode(bank, store, ui, rng=self.rng)
         self.running = True
 
@@ -418,6 +422,16 @@ class IELTSApp:
                 f"{self._restart_required_version}；请先退出并重新启动。"
             )
             return True
+        if self._pending_update_version is not None:
+            self.ui.success(
+                "程序更新包已准备至 "
+                f"{self._pending_update_version}；请先退出 IELTS Codex。"
+            )
+            if self._pending_update_command:
+                self.ui.hint(
+                    f"退出后双击运行：{self._pending_update_command}"
+                )
+            return True
 
         mode = "预览更新" if dry_run else "检查更新"
         self.ui.write()
@@ -444,6 +458,27 @@ class IELTSApp:
                 ],
             )
             self.ui.success("程序已安全更新；退出并重新启动后使用新版本。")
+            return True
+        if result.status == "staged":
+            if not result.completion_command:
+                self.ui.error("Windows 更新包已下载，但安装脚本路径缺失。")
+                return False
+            self._pending_update_version = result.latest_version
+            self._pending_update_command = result.completion_command
+            self.ui.panel(
+                "application update ready",
+                [
+                    f"版本      {result.current_version} → {result.latest_version}",
+                    f"安装方式  {result.install_kind} · Windows 退出后安装",
+                    f"安装脚本  {result.completion_command}",
+                    f"发布页    {result.release_url}",
+                ],
+            )
+            self.ui.success("更新包已下载并验证；当前安装没有被修改。")
+            self.ui.hint(
+                "退出所有 IELTS Codex 窗口后，双击运行上面的 "
+                "ielts-update.cmd；完成后重新打开终端。"
+            )
             return True
         if result.status == "up_to_date":
             self.ui.success(
@@ -494,6 +529,10 @@ class IELTSApp:
         if self._restart_required_version is not None:
             application_status += (
                 f" → {self._restart_required_version}（等待重启）"
+            )
+        elif self._pending_update_version is not None:
+            application_status += (
+                f" → {self._pending_update_version}（等待退出后安装）"
             )
         self.ui.panel(
             "update status · local only",

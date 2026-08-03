@@ -26,10 +26,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-      - name: Verify backward-compatible package command
+      - name: Verify packaged commands
         run: |
           python -m pip install .
+          ielts --version
           ielts-codex --version
+          python -c "from ielts_codex.updater import ProjectUpdater; assert ProjectUpdater().detect_install().kind == 'pip'"
       - name: Verify Windows launcher
         if: runner.os == 'Windows'
         shell: cmd

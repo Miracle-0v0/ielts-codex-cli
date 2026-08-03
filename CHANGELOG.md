@@ -4,6 +4,26 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.8] - 2026-08-03
+
+### Fixed
+
+- Added `ielts` as the primary packaged console command while retaining
+  `ielts-codex` as a backward-compatible alias, and made release-wheel
+  validation require both entry points.
+- Replaced the blanket rejection of Windows pip installations with a deferred
+  updater that downloads and validates the release under the user data
+  directory, then installs it from `ielts-update.cmd` only after the running
+  CLI exits.
+- Made the standalone Windows installer recheck the wheel digest, wait for the
+  originating process, use a retry-safe forced pip reinstall, and verify the
+  installed version, package paths, metadata, and both command launchers.
+
+### Changed
+
+- Extended cross-platform launcher CI and English installation/update
+  documentation for the two packaged command names and post-exit Windows flow.
+
 ## [0.6.7] - 2026-08-03
 
 ### Added
@@ -244,6 +264,7 @@ Initial public release.
 - Search across English words, Chinese meanings, and synonyms.
 - An MIT license and open-source contribution guide.
 
+[0.6.8]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.7...v0.6.8
 [0.6.7]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.6...v0.6.7
 [0.6.6]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.5...v0.6.6
 [0.6.5]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.4...v0.6.5
