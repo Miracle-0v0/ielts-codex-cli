@@ -4,6 +4,23 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.7] - 2026-08-03
+
+### Added
+
+- Added an interval-scaled terminal Ebbinghaus forgetting curve after every
+  `/learn` session, including the current sample size and real upcoming review
+  nodes from the spaced-repetition scheduler.
+- Added `/curve` so learners can reopen the conceptual forgetting curve at any
+  time; empty profiles receive a clear prompt to learn a first group.
+- Added a bilingual daily word list to `/today`, separating words completed
+  today from cards still due, with `/today words` as a list-only shortcut.
+
+### Changed
+
+- Updated the slash palette, command help, direct CLI commands, English
+  documentation, and full-project GIF for the new memory views.
+
 ## [0.6.6] - 2026-07-31
 
 ### Added
@@ -227,6 +244,7 @@ Initial public release.
 - Search across English words, Chinese meanings, and synonyms.
 - An MIT license and open-source contribution guide.
 
+[0.6.7]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.6...v0.6.7
 [0.6.6]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.5...v0.6.6
 [0.6.5]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.4...v0.6.5
 [0.6.4]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.3...v0.6.4

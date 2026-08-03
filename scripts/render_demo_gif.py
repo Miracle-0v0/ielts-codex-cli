@@ -421,7 +421,7 @@ def _render_frame(
         draw.ellipse((x - 6, 16, x + 6, 28), fill=color)
     draw.text(
         (width // 2, 22),
-        "ielts 0.6.6  ·  real CLI session",
+        "ielts 0.6.7  ·  real CLI session",
         font=latin_bold_font,
         fill=(210, 214, 220),
         anchor="mm",
@@ -829,7 +829,7 @@ def _record_session(
         animation.output(_read_expect(child, "评价记忆程度 › "), caption)
         animation.hold(caption, 8)
 
-        caption = "4 · Rate recall for adaptive spaced repetition"
+        caption = "4 · Rate recall and see the interval-scaled forgetting curve"
         animation.type_command("3", caption)
         child.sendline("3")
         animation.output(_read_expect(child, "› "), caption)
@@ -860,7 +860,14 @@ def _record_session(
         animation.output(stats_output, caption)
         animation.hold(caption, 7)
 
-        caption = "9 · Enter the pocket pixel field with the built-in dog"
+        caption = "9 · Open today's English-Chinese word list"
+        child.sendline("/today words")
+        today_output = _read_expect(child, "中英对照")
+        today_output += _read_expect(child, "› ")
+        animation.output(today_output, caption)
+        animation.hold(caption, 7)
+
+        caption = "10 · Enter the pocket pixel field with the built-in dog"
         animation.type_command("/game 1 environment", caption)
         child.sendline("/game 1 environment")
         game_output = _read_expect(child, "WASD/方向键")
@@ -868,7 +875,7 @@ def _record_session(
         animation.output(game_output, caption)
         animation.hold(caption, 12)
 
-        caption = "10 · Leave the expedition safely and return to the CLI"
+        caption = "11 · Leave the expedition safely and return to the CLI"
         child.send("q")
         quit_output = _read_expect(child, "任意其他键取消并继续。")
         animation.output(quit_output, caption)
@@ -877,14 +884,14 @@ def _record_session(
         animation.output(_read_expect(child, "› "), caption)
         animation.hold(caption, 5)
 
-        caption = "11 · Inspect application and OEWN status without networking"
+        caption = "12 · Inspect application and OEWN status without networking"
         child.sendline("/update status")
         update_output = _read_expect(child, "联网")
         update_output += _read_expect(child, "› ")
         animation.output(update_output, caption)
         animation.hold(caption, 8)
 
-        caption = "12 · Quit — progress is saved locally"
+        caption = "13 · Quit — progress is saved locally"
         child.sendline("/quit")
         animation.output(_read_expect(child, pexpect.EOF), caption)
         animation.hold(caption, 8)

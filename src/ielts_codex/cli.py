@@ -6,16 +6,19 @@ import argparse
 import random
 import re
 import shlex
-from dataclasses import dataclass
+from collections import Counter
+from dataclasses import dataclass, field
 from datetime import date
 from difflib import SequenceMatcher
 from pathlib import Path
+from statistics import median
 from typing import Sequence
 
 from . import __version__
 from .game_mode import GAME_DEFAULT_COUNT, GAME_MAX_COUNT, GameMode
 from .models import Rating, Word
 from .oewn import OEWNSyncError, OEWNSynchronizer, load_overlay
+from .scheduler import render_forgetting_curve
 from .storage import ProgressFileError, ProgressStore
 from .ui import TerminalUI
 from .updater import ProjectUpdateError, ProjectUpdater
@@ -43,7 +46,8 @@ SLASH_COMMANDS = (
     ("/search", "查询单词或释义"),
     ("/words", "浏览词表"),
     ("/topics", "查看主题"),
-    ("/today", "查看今日计划"),
+    ("/today", "查看今日计划与中英词单"),
+    ("/curve", "查看艾宾浩斯遗忘曲线"),
     ("/stats", "查看学习统计"),
     ("/goal", "修改每日目标"),
     ("/update", "更新知识库与程序"),
@@ -59,6 +63,7 @@ class SessionResult:
     correct: int = 0
     again: int = 0
     stopped: bool = False
+    words: list[str] = field(default_factory=list)
 
 
 class IELTSApp:
@@ -142,6 +147,7 @@ class IELTSApp:
             "topics": self._command_topics,
             "stats": self._command_stats,
             "today": self._command_today,
+            "curve": self._command_curve,
             "goal": self._command_goal,
             "update": self._command_update,
             # Kept for scripts written before /update; intentionally omitted
@@ -183,9 +189,20 @@ class IELTSApp:
         elif command == "stats":
             self.show_stats()
         elif command == "today":
-            self.show_today()
+            if query is None:
+                self.show_today()
+            elif query.lower() in {"words", "list"}:
+                self.show_today_words()
+            else:
+                self.ui.error("用法：ielts today [words]")
+                return 2
         elif command == "topics":
             self.show_topics()
+        elif command == "curve":
+            if query is not None:
+                self.ui.error("用法：ielts curve")
+                return 2
+            self.show_forgetting_curve()
         elif command == "search":
             if not query:
                 self.ui.error("search 需要一个单词或中文释义。")
@@ -251,8 +268,20 @@ class IELTSApp:
     def _command_stats(self, _args: list[str]) -> None:
         self.show_stats()
 
-    def _command_today(self, _args: list[str]) -> None:
-        self.show_today()
+    def _command_today(self, args: list[str]) -> None:
+        if not args:
+            self.show_today()
+            return
+        if len(args) == 1 and args[0].lower() in {"words", "list", "词单"}:
+            self.show_today_words()
+            return
+        self.ui.warning("用法：/today [words]")
+
+    def _command_curve(self, args: list[str]) -> None:
+        if args:
+            self.ui.warning("用法：/curve")
+            return
+        self.show_forgetting_curve()
 
     def _command_goal(self, args: list[str]) -> None:
         if len(args) != 1 or not args[0].isdigit():
@@ -627,7 +656,10 @@ class IELTSApp:
             result.reviewed += 1
             result.correct += int(outcome is not Rating.AGAIN)
             result.again += int(outcome is Rating.AGAIN)
+            result.words.append(word.word)
         self._session_summary("learn", result)
+        if result.reviewed:
+            self.show_forgetting_curve(result.words)
         return result
 
     def review(self, count: int, topic: str | None = None) -> SessionResult:
@@ -648,6 +680,7 @@ class IELTSApp:
             result.reviewed += 1
             result.correct += int(outcome is not Rating.AGAIN)
             result.again += int(outcome is Rating.AGAIN)
+            result.words.append(word.word)
         self._session_summary("review", result)
         return result
 
@@ -800,6 +833,7 @@ class IELTSApp:
                 self.ui.hint(word.example)
                 self.store.record_review(word.word, rating)
                 result.reviewed += 1
+                result.words.append(word.word)
                 break
 
         self._session_summary("quiz", result)
@@ -905,6 +939,115 @@ class IELTSApp:
                 )
             )
         self.ui.panel("today", lines)
+        if not compact:
+            self.show_today_words()
+
+    def show_today_words(self, current_day: date | None = None) -> None:
+        """Display today's completed and still-due words bilingually."""
+
+        day = current_day or date.today()
+        day_key = day.isoformat()
+        studied_names = set(self.store.reviewed_words_on(day))
+        studied = sorted(
+            (
+                word
+                for name in studied_names
+                if (word := self.bank.get(name)) is not None
+            ),
+            key=lambda word: word.word,
+        )
+        due = self.bank.due(
+            self.store.cards,
+            day,
+            len(self.bank.words),
+        )
+        pending = [word for word in due if word.word not in studied_names]
+        lines: list[str] = []
+
+        if studied:
+            lines.append(f"今日已学 / 已复习  {len(studied)}")
+            for word in studied:
+                card = self.store.cards[word.word]
+                marker = "↻" if card.due and card.due <= day_key else "✓"
+                lines.append(f"{marker} {word.word:<18} {word.meaning_zh}")
+        else:
+            lines.append("今天还没有完成单词；运行 /learn 开始今日词单。")
+
+        if pending:
+            if lines:
+                lines.append("")
+            lines.append(f"今日待复习  {len(pending)}")
+            lines.extend(
+                f"• {word.word:<18} {word.meaning_zh}" for word in pending
+            )
+
+        if studied:
+            lines.extend(("", "✓ 已完成 · ↻ 今天仍需再看 · • 待复习"))
+        self.ui.panel("today words · 中英对照", lines)
+
+    def show_forgetting_curve(
+        self,
+        word_names: Sequence[str] | None = None,
+        *,
+        current_day: date | None = None,
+    ) -> None:
+        """Display an interval-scaled conceptual Ebbinghaus curve."""
+
+        day = current_day or date.today()
+        names = (
+            list(dict.fromkeys(word_names))
+            if word_names is not None
+            else list(self.store.reviewed_words_on(day))
+        )
+        if not names:
+            names = sorted(self.store.cards)
+        cards = [
+            self.store.cards[name]
+            for name in names
+            if name in self.store.cards
+        ]
+        if not cards:
+            self.ui.warning("还没有记忆数据；先运行 /learn 学习一组单词。")
+            return
+
+        stability = float(median(max(1, card.interval) for card in cards))
+        stability_text = (
+            str(int(stability)) if stability.is_integer() else f"{stability:.1f}"
+        )
+        chart = tuple(
+            self.ui.style(line, self.ui.palette.teal)
+            for line in render_forgetting_curve(stability)
+        )
+        due_counts: Counter[int] = Counter()
+        for card in cards:
+            if not card.due:
+                continue
+            try:
+                offset = max(0, (date.fromisoformat(card.due) - day).days)
+            except ValueError:
+                continue
+            due_counts[offset] += 1
+        review_nodes = []
+        for offset, count in sorted(due_counts.items())[:5]:
+            when = (
+                "今天"
+                if offset == 0
+                else "明天"
+                if offset == 1
+                else f"{offset}天后"
+            )
+            review_nodes.append(f"{when} {count}词")
+
+        lines = [
+            f"当前样本  {len(cards)} 词 · 曲线尺度 S={stability_text} 天",
+            "无复习趋势估算  R(t) = e^(-t/S)",
+            "",
+            *chart,
+            "",
+            "计划复习  " + (" · ".join(review_nodes) if review_nodes else "尚未安排"),
+            "说明：曲线用于展示自然遗忘趋势；实际复习以卡片到期日为准。",
+        ]
+        self.ui.panel("Ebbinghaus · 艾宾浩斯遗忘曲线", lines)
 
     def show_stats(self) -> None:
         stats = self.store.stats(len(self.bank.words))
@@ -936,7 +1079,8 @@ class IELTSApp:
                 "/search <内容>          查单词、中文释义或近义词",
                 "/words [主题]           浏览词表；● 表示已学习",
                 "/topics                 查看各主题覆盖进度",
-                "/today                  查看今天的学习计划",
+                "/today [words]          查看今日计划与中英词单",
+                "/curve                 查看艾宾浩斯遗忘曲线",
                 "/stats                  查看累计学习数据",
                 "/goal <数量>            修改每日目标",
                 "/update [status]         更新知识库与 GitHub stable 程序版本",
@@ -965,14 +1109,14 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="?",
         metavar="command",
         help=(
-            "直接执行 learn/review/quiz/game/search/stats/topics/today/update；"
+            "直接执行 learn/review/quiz/game/search/stats/topics/today/curve/update；"
             "省略则进入交互模式"
         ),
     )
     parser.add_argument(
         "query",
         nargs="?",
-        help="search 的查询内容，或 update 的 status",
+        help="search 查询内容、today 的 words，或 update 的 status",
     )
     parser.add_argument("-n", "--count", type=int)
     parser.add_argument("-t", "--topic", help="限定 IELTS 主题")
@@ -1014,6 +1158,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "quiz",
         "stats",
         "today",
+        "curve",
         "topics",
         "search",
         "game",

@@ -158,6 +158,21 @@ class ProgressStore:
         self.data.settings["daily_goal"] = value
         self.save()
 
+    def reviewed_words_on(
+        self,
+        current_day: date | None = None,
+    ) -> tuple[str, ...]:
+        """Return the unique words whose latest review happened that day."""
+
+        day_key = (current_day or date.today()).isoformat()
+        return tuple(
+            sorted(
+                card.word
+                for card in self.cards.values()
+                if card.last_reviewed == day_key
+            )
+        )
+
     def stats(self, total_words: int, current_day: date | None = None) -> dict[str, Any]:
         day = current_day or date.today()
         today_key = day.isoformat()

@@ -32,6 +32,8 @@ learning interface is Chinese-first.
 - English definitions, Chinese meanings, phonetics, bilingual examples, and synonyms
 - Local, atomic JSON progress storage
 - Daily goals, streaks, accuracy, and mastery statistics
+- An interval-scaled Ebbinghaus forgetting curve after learning
+- Today's completed and due words in an English-Chinese list
 - English, Chinese, and synonym search
 - Manual Open English WordNet 2025 English-definition updates
 - Safe checks for newer stable releases from the official GitHub repository
@@ -145,7 +147,9 @@ ielts-codex
 | `/search <query>` | Search by English, Chinese meaning, or synonym |
 | `/words [topic]` | Browse words and learned status |
 | `/topics` | Show progress by topic |
-| `/today` | Show today's plan and goal |
+| `/today` | Show today's plan plus its bilingual word list |
+| `/today words` | Show only today's completed and due words |
+| `/curve` | Reopen the Ebbinghaus forgetting curve |
 | `/stats` | Show coverage, accuracy, streak, and mastery |
 | `/goal <count>` | Change the daily review goal |
 | `/update [status] [--force] [--dry-run]` | Update OEWN definitions and IELTS Codex |
@@ -196,6 +200,33 @@ Run:
 The quiz shows a Chinese meaning and asks for the English spelling. A correct
 answer advances the card. A misspelling reveals the answer and schedules the
 card as `Again`. Use `h` for a hint, `s` to skip, or `q` to stop.
+
+## Forgetting curve and today's words
+
+Completing any `/learn` session now displays a compact Ebbinghaus-style
+forgetting curve directly in the terminal. Its scale uses the median current
+review interval for that group, and the footer shows the cards' actual upcoming
+review nodes:
+
+```text
+› /curve
+```
+
+The exponential line is a conceptual estimate of natural forgetting, not a
+measurement or medical prediction of an individual learner's memory. IELTS
+Codex continues to schedule every card from its real Again / Hard / Good / Easy
+history.
+
+Run `/today` to see the daily goal followed immediately by the English-Chinese
+list of words completed today and cards still due. Use the list-only shortcut
+when the overview is not needed:
+
+```text
+› /today words
+```
+
+The markers mean `✓` completed, `↻` reviewed but still due today, and `•` not
+yet reviewed today.
 
 ## Pocket pixel game mode
 
