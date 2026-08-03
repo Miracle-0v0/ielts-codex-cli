@@ -29,6 +29,7 @@ Repository = "https://github.com/Miracle-0v0/ielts-codex-cli.git"
 Issues = "https://github.com/Miracle-0v0/ielts-codex-cli/issues"
 
 [project.scripts]
+ielts = "ielts_codex.cli:main"
 ielts-codex = "ielts_codex.cli:main"
 
 [tool.setuptools]

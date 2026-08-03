@@ -4,6 +4,12 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Installed the `ielts` command on pip installations so the packaged command
+  matches the in-app `prog="ielts"` branding and the source-installer
+  launchers; `ielts-codex` remains available as an alias.
+
 ## [0.6.7] - 2026-08-03
 
 ### Added

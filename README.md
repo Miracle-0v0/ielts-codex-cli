@@ -129,12 +129,11 @@ Direct `python ielts.py` launches still work with Python 3.10+, and explain the
 version requirement clearly when an older interpreter is used.
 
 If Python 3.10+ is already available, a normal Python package installation
-continues to provide the established `ielts-codex` command. Use the source
-installer above when you want the shorter `ielts` command:
+provides the `ielts` command, with `ielts-codex` retained as an alias:
 
 ```bash
 python -m pip install .
-ielts-codex
+ielts
 ```
 
 ## Interactive commands
