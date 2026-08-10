@@ -4,6 +4,15 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.9] - 2026-08-11
+
+### Changed
+
+- Rewrote the README in Chinese so visitors can immediately understand the
+  project: what it is, highlighted features, quick start, vocabulary
+  provenance, and license/disclaimer, while moving implementation details out
+  of the front page.
+
 ## [0.6.8] - 2026-08-03
 
 ### Fixed
@@ -265,6 +274,7 @@ Initial public release.
 - An MIT license and open-source contribution guide.
 
 [0.6.8]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.7...v0.6.8
+[0.6.9]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.8...v0.6.9
 [0.6.7]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.6...v0.6.7
 [0.6.6]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.5...v0.6.6
 [0.6.5]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.4...v0.6.5
