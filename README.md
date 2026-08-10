@@ -76,3 +76,5 @@ ielts
 - 遗忘曲线等展示为概念性估计，不构成对个人记忆效果的测量或承诺
 
 欢迎提交 Issue 和 PR，贡献指南见 [CONTRIBUTING.md](CONTRIBUTING.md)，更新历史见 [CHANGELOG.md](CHANGELOG.md)。
+
+更详细的技术说明（英文）见 [docs/TECHNICAL_ROADMAP.md](docs/TECHNICAL_ROADMAP.md)。
