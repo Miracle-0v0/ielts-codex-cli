@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import os
 import random
 import re
 import shlex
+import subprocess
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date
@@ -458,6 +460,7 @@ class IELTSApp:
                 ],
             )
             self.ui.success("程序已安全更新；退出并重新启动后使用新版本。")
+            self._refresh_command_launcher(result.install_kind)
             return True
         if result.status == "staged":
             if not result.completion_command:
@@ -484,6 +487,7 @@ class IELTSApp:
             self.ui.success(
                 f"程序已是最新 stable 版本：IELTS Codex {result.latest_version}"
             )
+            self._refresh_command_launcher(result.install_kind)
             return True
         if result.status == "ahead":
             self.ui.success(
@@ -508,6 +512,43 @@ class IELTSApp:
         if result.release_url:
             self.ui.hint(f"可手动安装官方 release：{result.release_url}")
         return False
+
+    def _refresh_command_launcher(self, install_kind: str) -> None:
+        """Re-run the source installer so the ``ielts`` command stays registered.
+
+        Source checkouts are only reachable through the ``ielts`` shim that
+        ``install.bat`` writes into the user PATH, so a successful ``/update``
+        refreshes that registration as well.
+        """
+
+        if os.name != "nt" or install_kind != "source":
+            return
+        try:
+            target = self.project_updater.detect_install()
+        except (ProjectUpdateError, OSError) as exc:
+            self.ui.warning(f"无法定位源码目录，ielts 命令未刷新（{exc}）。")
+            return
+        if target.kind != "source" or target.root is None:
+            return
+        installer = target.root / "install.bat"
+        if not installer.is_file():
+            return
+        try:
+            completed = subprocess.run(
+                ["cmd.exe", "/c", str(installer)],
+                cwd=str(target.root),
+                timeout=120,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            self.ui.warning(f"ielts 命令刷新失败：{exc}")
+            return
+        if completed.returncode != 0:
+            self.ui.warning(
+                "ielts 命令刷新失败；可在源码目录手动运行 install.bat。"
+            )
+            return
+        self.ui.success("ielts 命令已注册；新开终端后可直接运行 ielts。")
 
     def show_update_status(self) -> None:
         """Show local application and OEWN state without network access."""

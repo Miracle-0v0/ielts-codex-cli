@@ -4,6 +4,15 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.10] - 2026-09-04
+
+### Changed
+
+- Made `/update` re-run the Windows source installer after a successful
+  application check or update, so the `ielts` command shim and its user PATH
+  entry are registered or refreshed automatically instead of requiring a
+  separate `install.bat` run.
+
 ## [0.6.9] - 2026-08-11
 
 ### Changed
@@ -275,6 +284,7 @@ Initial public release.
 
 [0.6.8]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.7...v0.6.8
 [0.6.9]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.8...v0.6.9
+[0.6.10]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.9...v0.6.10
 [0.6.7]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.6...v0.6.7
 [0.6.6]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.5...v0.6.6
 [0.6.5]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.4...v0.6.5
