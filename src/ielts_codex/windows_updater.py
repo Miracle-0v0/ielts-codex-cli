@@ -1,4 +1,4 @@
-"""Standalone Windows installer for a wheel staged by ``/update``.
+"""Standalone Windows installer for a wheel staged by ``/update program``.
 
 This module intentionally has no package-relative imports.  The running copy is
 placed beside the verified wheel before the interactive CLI exits, so it stays

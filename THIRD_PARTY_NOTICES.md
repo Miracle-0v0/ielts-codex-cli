@@ -1,12 +1,17 @@
 # Third-Party Notices
 
-IELTS Codex is distributed under the MIT License, but its optional online sync
-can download and locally cache third-party lexical data. The third-party data
-is not relicensed under the IELTS Codex MIT License.
+IELTS Codex is distributed under the MIT License, but its optional dictionary
+reference update can download and locally cache third-party lexical data.
+The third-party data is not relicensed under the IELTS Codex MIT License.
 
 ## Open English WordNet 2025
 
-The optional `/update` command uses the standard JSON release of:
+The optional `/update dictionary` command reads standard JSON releases from
+Open English WordNet. The source and license notices below document the 2025
+edition. The installed release version and source are shown by
+`/update dictionary status`; the updater may discover newer upstream releases.
+
+Baseline source:
 
 - **Resource:** Open English WordNet 2025 Edition
 - **Source:** <https://en-word.net/>
@@ -21,15 +26,15 @@ WordNet Community. Use of its content requires attribution to both Princeton
 WordNet and the Open English WordNet team.
 
 IELTS Codex downloads the upstream release only after the user explicitly runs
-`/update`; ordinary startup remains offline.
-It selects a matching sense for words already present in the bundled IELTS
-vocabulary and stores the selected English definitions in a local JSON overlay.
-This is an extraction and transformation of the upstream resource. IELTS Codex
-does not import OEWN's full lexical database, and it does not use OEWN to
-replace the project's curated Chinese meanings, translations, examples,
-phonetics, topics, bands, or synonyms.
+`/update dictionary` or its legacy `/sync` alias; ordinary startup, `/update`
+and `/update status` remain offline. The command previews matching senses for
+bundled words and saves reference definitions only after confirmation.
+This is an extraction and transformation of the upstream resource, not an
+import of the full lexical database. References are displayed separately; they
+do not replace teaching definitions in either language, personal entries,
+examples, phonetics, editorial levels, synonyms or exercise answers.
 
-Suggested attribution:
+Suggested attribution for the 2025 edition:
 
 > English definitions provided by Open English WordNet 2025, derived from
 > Princeton WordNet, and used under CC BY 4.0. Definitions were selected and
@@ -73,6 +78,6 @@ The applicable notice is reproduced below:
 ## Scope
 
 The notices above apply to OEWN-derived content downloaded into
-`oewn_overlay.json`. The repository's bundled base vocabulary remains under the
-project's MIT License until and unless third-party definitions are deliberately
-incorporated into it.
+`oewn_overlay.json` and its rollback snapshot. The repository's bundled base
+vocabulary remains under the project's MIT License until and unless third-party
+definitions are deliberately incorporated into it.

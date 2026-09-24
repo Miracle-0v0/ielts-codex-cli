@@ -4,16 +4,18 @@
 The recorder is deliberately separate from the package's runtime dependencies.
 It uses a pseudo-terminal so every panel, prompt, answer, and status message in
 the GIF comes from the actual application. The session stays offline and uses
-a one-entry, CC BY 4.0 OEWN overlay fixture for the local update-status screen.
+a fresh temporary profile. No personal learning records are read or changed.
 
 Development requirements:
 
-    python -m pip install pexpect Pillow
+    python -m pip install Pillow  # plus pexpect on macOS/Linux
 """
 
 from __future__ import annotations
 
 import argparse
+import codecs
+import time
 import json
 import os
 import re
@@ -21,25 +23,26 @@ import subprocess
 import sys
 import tempfile
 import unicodedata
-from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator, Pattern
+from typing import Iterator
 
 try:
-    import pexpect
     from PIL import Image, ImageDraw, ImageFont
 except ImportError as exc:  # pragma: no cover - developer-facing helper
     raise SystemExit(
-        "Demo rendering requires pexpect and Pillow: "
-        "python -m pip install pexpect Pillow"
+        "Demo rendering requires Pillow: "
+        "python -m pip install Pillow"
     ) from exc
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = REPO_ROOT / "docs" / "demo.gif"
-COLS = 94
-ROWS = 27
+sys.path.insert(0, str(REPO_ROOT / "src"))
+from ielts_codex import __version__ as APP_VERSION
+
+COLS = 100
+ROWS = 32
 FONT_SIZE = 18
 BRAILLE_FONT_SIZE = 13
 CELL_WIDTH = 9
@@ -213,7 +216,14 @@ class MiniTerminal:
         elif final == "D":
             self.column = max(0, self.column - (values[0] or 1))
         elif final == "K":
-            for column in range(self.column, self.columns):
+            mode = values[0] if values else 0
+            start = 0 if mode in (1, 2) else self.column
+            end = self.column + 1 if mode == 1 else self.columns
+            for column in range(start, min(end, self.columns)):
+                self.cells[self.row][column] = Cell()
+        elif final == "X":
+            end = min(self.columns, self.column + (values[0] or 1))
+            for column in range(self.column, end):
                 self.cells[self.row][column] = Cell()
 
     def _sgr(self, values: list[int]) -> None:
@@ -355,6 +365,12 @@ def _find_fonts(
             symbols if symbols.is_file() else font_override,
         )
 
+    if os.name == "nt":
+        fonts = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts"
+        if (fonts / "msyh.ttc").is_file():
+            return (fonts / "msyh.ttc", fonts / "msyhbd.ttc", 0,
+                    fonts / "consola.ttf", fonts / "consolab.ttf", fonts / "consola.ttf")
+
     regular = Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc")
     bold = Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc")
     # DejaVu Sans Mono covers IPA, box drawing, and block elements.  Noto's
@@ -421,7 +437,7 @@ def _render_frame(
         draw.ellipse((x - 6, 16, x + 6, 28), fill=color)
     draw.text(
         (width // 2, 22),
-        "ielts 0.6.9  ·  real CLI session",
+        f"ielts {APP_VERSION}  ·  real CLI session",
         font=latin_bold_font,
         fill=(210, 214, 220),
         anchor="mm",
@@ -600,7 +616,7 @@ def _output_chunks(
 
 
 class Animation:
-    """Turn a real CLI transcript into smooth, fixed-rate terminal frames."""
+    """Turn a real CLI transcript into timed terminal frames."""
 
     def __init__(
         self,
@@ -643,115 +659,111 @@ class Animation:
             self.terminal.feed(chunk)
             self.snapshot(caption)
 
-    def type_command(self, value: str, caption: str) -> None:
-        # TerminalUI resets prompt styling before the terminal echoes input.
-        self.terminal.feed("\x1b[0m")
-        for char in value:
-            self.terminal.feed(char)
-            self.snapshot(caption)
-        self.press_enter(caption)
-
-    def press_enter(self, caption: str) -> None:
-        self.terminal.feed("\r\n")
-        self.snapshot(caption)
-
     def hold(self, caption: str, frame_count: int) -> None:
-        for _ in range(frame_count):
-            self.snapshot(caption)
+        self.snapshot(caption)
+        self.durations[-1] = frame_count * FRAME_DURATION_MS
 
 
-def _demo_overlay() -> dict[str, object]:
-    """A minimal real OEWN 2025 record used only in the offline demo."""
+def _run_demo_child(data_dir: str) -> int:
+    """Start the unmodified CLI on the recorder's real terminal."""
+    os.environ.pop("NO_COLOR", None)
+    os.environ.update(TERM="xterm-256color", COLUMNS=str(COLS), LINES=str(ROWS))
+    if os.name == "nt":
+        # ConPTY attaches a real console even when the parent has piped stdio.
+        # Reopen its devices before importing TerminalUI's default streams.
+        sys.stdin = open("CONIN$", "r", encoding="utf-8")
+        sys.stdout = open("CONOUT$", "w", encoding="utf-8", buffering=1)
+        sys.stderr = open("CONOUT$", "w", encoding="utf-8", buffering=1)
+        import ctypes
+        import msvcrt
+        from ctypes import wintypes
 
-    return {
-        "schema_version": 1,
-        "created_at": "2026-07-30T00:00:00+00:00",
-        "synced_at": "2026-07-30T00:00:00+00:00",
-        "provider": {
-            "id": "oewn",
-            "name": "Open English WordNet",
-            "version": "2025",
-            "tag_name": "2025-edition",
-            "published_at": "2025-12-31T14:39:12Z",
-            "release_url": (
-                "https://github.com/globalwordnet/english-wordnet/"
-                "releases/tag/2025-edition"
-            ),
-            "download_url": (
-                "https://github.com/globalwordnet/english-wordnet/releases/"
-                "download/2025-edition/english-wordnet-2025-json.zip"
-            ),
-            "homepage": "https://en-word.net/",
-            "license": "CC BY 4.0",
-            "license_url": "https://creativecommons.org/licenses/by/4.0/",
-            "archive_sha256": (
-                "7d749f6e2c39e6970e4997839dcf6e42"
-                "fd281f3c2fae0171d2192bae8cfa4b51"
-            ),
-            "attribution": (
-                "Open English WordNet, derived from Princeton WordNet, "
-                "licensed under CC BY 4.0."
-            ),
-        },
-        "entries": {
-            "conservation": {
-                "definition_en": (
-                    "the preservation and careful management of the "
-                    "environment and of natural resources"
-                ),
-                "synonyms": [],
-                "synset_id": "00820935-n",
-                "part_of_speech": "n",
-                "match_score": 0.4522,
-            }
-        },
-        "skipped": {},
-    }
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.GetConsoleMode.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+        kernel.SetConsoleMode.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+        handle = msvcrt.get_osfhandle(sys.stdout.fileno())
+        mode = wintypes.DWORD()
+        if kernel.GetConsoleMode(handle, ctypes.byref(mode)):
+            kernel.SetConsoleMode(handle, mode.value | 0x0004)
+    if not all(stream.isatty() for stream in (sys.stdin, sys.stdout, sys.stderr)):
+        raise RuntimeError("The demo must run on a real terminal.")
+    sys.path.insert(0, str(REPO_ROOT / "src"))
+    from ielts_codex.cli import main
+    return main(["--seed", "4", "--data-dir", data_dir])
 
 
-@contextmanager
-def _demo_data_directory() -> Iterator[Path]:
-    """Reserve a stable path so repeated renders are byte-for-byte stable."""
+class DemoTerminal:
+    """Capture actual terminal output; never paint invented CLI responses."""
 
-    data_dir = Path(tempfile.gettempdir()) / "ielts-codex-gif-demo"
-    try:
-        data_dir.mkdir()
-    except FileExistsError as exc:
-        raise RuntimeError(
-            f"Reserved demo directory already exists: {data_dir}. "
-            "Move it aside before rendering; the script will not overwrite it."
-        ) from exc
-    try:
-        yield data_dir
-    finally:
-        for filename in (
-            "progress.json",
-            "oewn_overlay.json",
-            "game.json",
-            "pocket-lexicon-bgm-v1.wav",
-        ):
-            (data_dir / filename).unlink(missing_ok=True)
-        try:
-            data_dir.rmdir()
-        except OSError:
-            # Do not delete unexpected files from a shared temporary directory.
-            print(
-                f"Warning: preserved non-demo files in {data_dir}",
-                file=sys.stderr,
-            )
+    def __init__(self, data_dir: Path) -> None:
+        self.recording = ""
+        self.offset = 0
+        self.decoder = codecs.getincrementaldecoder("utf-8")()
+        argv = [sys.executable, "-X", "utf8", "-u", str(Path(__file__).resolve()),
+                "--record-child", str(data_dir)]
+        if os.name == "nt":
+            from smoke_windows_terminal import Console
+            self.child = Console(argv, columns=COLS, rows=ROWS)
+        else:
+            try:
+                import pexpect
+            except ImportError as exc:
+                raise SystemExit("On macOS/Linux install pexpect: python -m pip install pexpect") from exc
+            self.child = pexpect.spawn(argv[0], argv[1:], cwd=str(REPO_ROOT),
+                                       encoding="utf-8", timeout=15,
+                                       dimensions=(ROWS, COLS), echo=True)
 
+    def drain(self) -> str:
+        if os.name == "nt":
+            with self.child.lock:
+                value = bytes(self.child.chunks[self.offset:])
+                self.offset = len(self.child.chunks)
+            value = self.decoder.decode(value)
+        else:
+            import pexpect
+            parts = []
+            while True:
+                try:
+                    parts.append(self.child.read_nonblocking(65536, timeout=0.06))
+                except (pexpect.TIMEOUT, pexpect.EOF):
+                    break
+            value = "".join(parts)
+        self.recording += value
+        return value
 
-def _read_expect(
-    child: pexpect.spawn,
-    pattern: str | Pattern[str] | object,
-) -> str:
-    child.expect(pattern)
-    output = ""
-    if isinstance(child.before, str):
-        output += child.before
-    if isinstance(child.after, str):
-        output += child.after
-    return output
+    def expect(self, text: str) -> str:
+        if os.name == "nt":
+            self.child.expect(text, timeout=15)
+            time.sleep(0.06)
+            return self.drain()
+        self.child.expect_exact(text)
+        value = self.child.before + self.child.after
+        self.recording += value
+        # Do not read ahead on POSIX: expect must retain the next prompt.
+        return value
+
+    def send(self, keys: str) -> None:
+        self.child.send(keys)
+
+    def finish(self) -> str:
+        if os.name == "nt":
+            self.child.finish()
+            time.sleep(0.08)
+            return self.drain()
+        import pexpect
+        self.child.expect(pexpect.EOF)
+        value = self.child.before
+        self.recording += value
+        self.child.close()
+        if self.child.exitstatus != 0:
+            raise RuntimeError(f"CLI exited with status {self.child.exitstatus}")
+        return value
+
+    def close(self) -> None:
+        if os.name == "nt":
+            self.child.close()
+        else:
+            self.child.close(force=True)
 
 
 def _record_session(
@@ -761,144 +773,121 @@ def _record_session(
     latin_bold_font: ImageFont.FreeTypeFont,
     braille_font: ImageFont.FreeTypeFont,
 ) -> tuple[list[Image.Image], list[int]]:
-    terminal = MiniTerminal()
-    animation = Animation(
-        terminal,
-        cjk_regular_font,
-        cjk_bold_font,
-        latin_regular_font,
-        latin_bold_font,
-        braille_font,
-    )
+    events = []
+    from ielts_codex.context import load_exercises
+    from ielts_codex.word_bank import WordBank
 
-    with _demo_data_directory() as data_dir:
-        (data_dir / "oewn_overlay.json").write_text(
-            json.dumps(_demo_overlay(), ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
-        environment = os.environ.copy()
-        environment.pop("NO_COLOR", None)
-        source_dir = str(REPO_ROOT / "src")
-        environment["PYTHONPATH"] = (
-            source_dir
-            + (
-                os.pathsep + environment["PYTHONPATH"]
-                if environment.get("PYTHONPATH")
-                else ""
-            )
-        )
-        environment.update(
-            {
-                "TERM": "xterm-256color",
-                "COLUMNS": str(COLS),
-                "LINES": str(ROWS),
-                "PYTHONUNBUFFERED": "1",
-                "IELTS_CODEX_GAME_FORCE_PIXEL": "1",
-            }
-        )
-        child = pexpect.spawn(
-            sys.executable,
-            [
-                "-m",
-                "ielts_codex",
-                "--seed",
-                "4",
-                "--data-dir",
-                str(data_dir),
-            ],
-            cwd=str(REPO_ROOT),
-            env=environment,
-            encoding="utf-8",
-            timeout=15,
-            dimensions=(ROWS, COLS),
-            echo=False,
-        )
+    bank = WordBank.bundled()
+    report_dir = REPO_ROOT / "terminal-results" / "demo"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="ielts-demo-") as temporary:
+        data_dir = Path(temporary)
+        terminal = DemoTerminal(data_dir)
 
-        caption = "1 · Start offline with today's learning dashboard"
-        animation.output(_read_expect(child, "› "), caption)
-        animation.hold(caption, 5)
+        def show(expected: str, caption: str, hold: int = 12) -> str:
+            value = terminal.expect(expected)
+            events.append(("output", value, caption))
+            events.append(("hold", hold, caption))
+            return value
 
-        caption = "2 · Start a focused environment vocabulary card"
-        child.sendline("/learn 1 environment")
-        animation.output(_read_expect(child, "q 结束  › "), caption)
-        animation.hold(caption, 5)
+        def enter(value: str = "") -> None:
+            terminal.send(value + "\r")
 
-        caption = "3 · Reveal bilingual details and OEWN attribution"
-        animation.press_enter(caption)
-        child.sendline("")
-        animation.output(_read_expect(child, "评价记忆程度 › "), caption)
-        animation.hold(caption, 8)
+        def progress() -> dict:
+            return json.loads((data_dir / "progress.json").read_text(encoding="utf-8"))
 
-        caption = "4 · Rate recall and see the interval-scaled forgetting curve"
-        animation.type_command("3", caption)
-        child.sendline("3")
-        animation.output(_read_expect(child, "› "), caption)
-        animation.hold(caption, 6)
+        try:
+            caption = "1 / Daily study - offline, no account"
+            show("输入 /study", caption)
+            enter("/study 20")
+            show("每日分钟", caption, 3)
+            enter()
+            show("薄弱项", caption, 3)
+            enter("2")
+            show("词包", caption, 3)
+            enter("core")
+            show("Enter 开始/继续", caption, 24)
 
-        caption = "5 · Spell the word from its Chinese definition"
-        child.sendline("/quiz 1 environment")
-        animation.output(_read_expect(child, "answer › "), caption)
-        animation.hold(caption, 6)
+            caption = "2 / Recall a word, then save your place"
+            enter()
+            show("Enter 显示答案", caption, 18)
+            first_word = bank.get(progress()["study"]["items"][0]["word"])
+            enter()
+            show("评价记忆程度", caption, 24)
+            enter("3")
+            show("Enter 显示答案", caption, 3)
+            enter("q")
+            show("下次 /study 从这里继续", caption, 18)
 
-        caption = "6 · Get immediate spelling feedback"
-        animation.type_command("conservation", caption)
-        child.sendline("conservation")
-        animation.output(_read_expect(child, "› "), caption)
-        animation.hold(caption, 6)
+            caption = "3 / Resume the same plan"
+            enter("/study")
+            show("Enter 开始/继续", caption, 24)
+            enter("q")
 
-        caption = "7 · Search any word for its complete learning card"
-        child.sendline("conservation")
-        search_output = _read_expect(child, "来源")
-        search_output += _read_expect(child, "› ")
-        animation.output(search_output, caption)
-        animation.hold(caption, 8)
+            caption = "4 / Spelling - errors stay errors"
+            enter("/quiz 1")
+            show("answer ›", caption, 18)
+            enter(first_word.word + "123")
+            show("quiz relearn", caption, 24)
+            show("answer ›", caption, 3)
+            enter("q")
+            show("quiz 提前结束", caption, 3)
 
-        caption = "8 · Review learning progress and accuracy"
-        child.sendline("/stats")
-        stats_output = _read_expect(child, "累计动作")
-        stats_output += _read_expect(child, "› ")
-        animation.output(stats_output, caption)
-        animation.hold(caption, 7)
+            caption = "5 / Find the skill that needs practice"
+            enter("/mistakes")
+            show("下次练习", caption, 24)
+            enter("/mistakes practice spelling")
+            show("answer ›", caption, 12)
+            enter(first_word.word)
+            show("quiz 完成", caption, 18)
 
-        caption = "9 · Open today's English-Chinese word list"
-        child.sendline("/today words")
-        today_output = _read_expect(child, "中英对照")
-        today_output += _read_expect(child, "› ")
-        animation.output(today_output, caption)
-        animation.hold(caption, 7)
+            caption = "6 / Practise word forms and collocations"
+            enter("/context 1")
+            show("choice ›", caption, 24)
+            plain = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", terminal.recording)
+            compact = re.sub(r"\s+", "", plain)
+            exercises = [exercise for exercise in load_exercises()
+                         if re.sub(r"\s+", "", exercise.prompt) in compact]
+            if len(exercises) != 1:
+                raise RuntimeError("Cannot identify the actual context question.")
+            exercise = exercises[0]
+            enter(str(exercise.choices.index(exercise.answer) + 1))
+            show("context 完成", caption, 24)
 
-        caption = "10 · Enter the pocket pixel field with the built-in dog"
-        animation.type_command("/game 1 environment", caption)
-        child.sendline("/game 1 environment")
-        game_output = _read_expect(child, "WASD/方向键")
-        game_output += _read_expect(child, "q 退出")
-        animation.output(game_output, caption)
-        animation.hold(caption, 12)
+            caption = "7 / Bring your own vocabulary"
+            enter("/import examples/vocabulary.csv reading")
+            show("确认导入以上词条？", caption, 24)
+            enter("y")
+            show("已导入", caption, 8)
+            enter("/decks")
+            show("* 表示当前词包", caption, 24)
 
-        caption = "11 · Leave the expedition safely and return to the CLI"
-        child.send("q")
-        quit_output = _read_expect(child, "任意其他键取消并继续。")
-        animation.output(quit_output, caption)
-        animation.hold(caption, 4)
-        child.send("q")
-        animation.output(_read_expect(child, "› "), caption)
-        animation.hold(caption, 5)
-
-        caption = "12 · Inspect application and OEWN status without networking"
-        child.sendline("/update status")
-        update_output = _read_expect(child, "联网")
-        update_output += _read_expect(child, "› ")
-        animation.output(update_output, caption)
-        animation.hold(caption, 8)
-
-        caption = "13 · Quit — progress is saved locally"
-        child.sendline("/quit")
-        animation.output(_read_expect(child, pexpect.EOF), caption)
-        animation.hold(caption, 8)
-        child.close()
-        if child.exitstatus not in (None, 0):
-            raise RuntimeError(f"CLI demo exited with status {child.exitstatus}")
-
+            caption = "8 / Separate recall, spelling and context progress"
+            enter("/stats")
+            show("稳定复习", caption, 24)
+            enter("/quit")
+            events.append(("output", terminal.finish(), "Progress saved locally - start with /study 20"))
+            events.append(("hold", 24, "Progress saved locally - start with /study 20"))
+            (report_dir / "recording.json").write_text(json.dumps({
+                "version": APP_VERSION,
+                "transport": "Windows ConPTY" if os.name == "nt" else "POSIX PTY",
+                "commands": ["/study 20", "/study", "/quiz 1", "/mistakes",
+                             "/mistakes practice spelling", "/context 1",
+                             "/import examples/vocabulary.csv reading", "/decks", "/stats", "/quit"],
+                "attempts": len(progress()["attempts"]),
+                "completed": True,
+            }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        finally:
+            terminal.close()
+            (report_dir / "session.ansi").write_text(terminal.recording, encoding="utf-8")
+    print(f"Recorded {APP_VERSION} CLI session; encoding GIF...", flush=True)
+    animation = Animation(MiniTerminal(), cjk_regular_font, cjk_bold_font,
+                          latin_regular_font, latin_bold_font, braille_font)
+    for action, value, caption in events:
+        if action == "output":
+            animation.output(value, caption)
+        else:
+            animation.hold(caption, value)
     return animation.frames, animation.durations
 
 
@@ -938,6 +927,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    if len(sys.argv) == 3 and sys.argv[1] == "--record-child":
+        return _run_demo_child(sys.argv[2])
     args = build_parser().parse_args()
     (
         regular_path,
@@ -972,7 +963,7 @@ def main() -> int:
     total_seconds = sum(durations) / 1000
     print(
         f"Rendered {len(frames)} real CLI frames ({total_seconds:.1f}s, "
-        f"{FRAME_DURATION_MS}ms/frame) to {output} ({size:.2f} MiB)"
+        f"{FRAME_DURATION_MS}ms playback step) to {output} ({size:.2f} MiB)"
     )
     return 0
 

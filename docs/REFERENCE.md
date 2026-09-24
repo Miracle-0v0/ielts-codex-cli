@@ -36,7 +36,7 @@ keeping study records.
 | `/learn [count] [topic]` | Learn unseen words; default 10 |
 | `/review [count] [topic]` | Due recognition review |
 | `/quiz [count] [topic]` | Chinese-to-English spelling |
-| `/context [count]` | Fixed-choice word forms and collocations |
+| `/context [count] [topic]` | Fixed-choice word forms and collocations |
 | `/mistakes [recall\|spelling\|context]` | Pending weaknesses and task-specific recent results |
 | `/mistakes practice [task]` | Practice pending difficulties |
 | `/import "file.csv" [deck]` | Preview, validate and confirm CSV or JSON import |
@@ -163,13 +163,15 @@ prerelease downloads and downgrades remain rejected. `--dry-run` checks
 without installation.
 
 Source updates require official `main`, the expected HTTPS origin, a clean
-index and a fast-forward to the release. Pip updates require the exact
-pure-Python wheel and verified size, GitHub digest, metadata, paths and RECORD
+working tree and index, and a fast-forward to the release. Pip updates require
+the exact pure-Python wheel and verified size, GitHub digest, metadata, paths and RECORD
 hashes. Unsupported, dirty or forked installs are refused before changes.
 
-On Windows the validated wheel and `ielts-update.cmd` are staged. Exit all
-IELTS Codex windows, then run the printed script; it verifies the wheel again,
-installs and checks both commands. Restart and run `ielts --version`.
+For pip installations on Windows, the validated wheel and `ielts-update.cmd`
+are staged. Exit all IELTS Codex windows, then run the printed script; it
+verifies the wheel again, installs and checks both commands. Source
+installations update the checkout directly. Restart after either kind of
+update and run `ielts --version`.
 The trust boundary is GitHub TLS, the official repository and GitHub's digest;
 the digest is not an independent maintainer signature.
 
@@ -230,8 +232,8 @@ The two help channels are intentionally separate:
 - `g` asks the pet for a rough direction to the current target without
   revealing the letter.
 
-Hints are drawn only from the existing curated word fields. The vision API does
-not invent definitions, etymologies, examples, or mnemonics. A successful round records game performance separately from independent
+Hints are drawn only from the existing fields of the selected word, including
+fields from personal imports. The vision API does not invent definitions, etymologies, examples, or mnemonics. A successful round records game performance separately from independent
 accuracy and stable-review evidence. Passive pet visibility is free. Requesting a learning hint or pet
 direction caps the result at `Hard`, while directly revealing the next letter
 records `Again`.

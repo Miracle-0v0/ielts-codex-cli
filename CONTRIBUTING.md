@@ -39,12 +39,26 @@ ielts --version
 ielts-codex --version
 ```
 
+After package installation, exercise native terminal input with the command for
+your platform:
+
+```bash
+# Linux / macOS
+python3 scripts/smoke_posix_terminal.py --report-dir terminal-results/posix
+# Windows
+python scripts/smoke_windows_terminal.py --installed --output terminal-results/windows
+```
+
+These checks use temporary synthetic progress; reports go into the ignored
+`terminal-results/` directory.
+
 The repository's launcher compatibility workflow runs learning/data tests, builds
 and checks the wheel (including every bundled JSON resource), installs that
-wheel, and checks commands, source installers and launchers on Ubuntu, macOS,
-and Windows. It runs for every change to `main` and every pull request. A
-configured workflow is not evidence that a particular revision has passed;
-record actual run results separately from local tests and real terminal use.
+wheel, and checks native terminal interaction, commands, source installers and
+launchers on Ubuntu, macOS, and Windows. It runs for pushes to `main` or
+`release/**`, pull requests, manual dispatches, and the `v1.0.0` release tag.
+Behavior and terminal reports are kept as workflow artifacts. Record the
+actual run result when reporting validation.
 
 In PowerShell, set `$env:IELTS_CODEX_TEST_WHEEL_DIR = "dist"` before the wheel
 test and use `python` instead of `python3`. Core tests use temporary directories.
@@ -57,8 +71,9 @@ replace those interactions.
 ```text
 src/ielts_codex/     Application code and bundled data
 tests/              Behavioral tests and small synthetic migration fixtures
+examples/           Editable CSV and JSON vocabulary examples
 docs/               Learning, vocabulary, installation and release guidance
-scripts/            Optional maintenance tools, including the existing demo generator
+scripts/            Maintenance, demo generation and native terminal checks
 .github/workflows/  Compatibility and behavioral checks
 ```
 
@@ -70,6 +85,23 @@ the repository.
 
 The 1.0 scope and release process are described in [docs/1.0_PLAN.md](docs/1.0_PLAN.md).
 The current command reference is [docs/REFERENCE.md](docs/REFERENCE.md).
+
+## Refresh the README demo
+
+Run the recorder from the repository root with the current source:
+
+```text
+python -m pip install Pillow
+python scripts/render_demo_gif.py
+```
+
+On macOS/Linux also install `pexpect` and a CJK font, or pass `--font PATH`.
+Windows uses the standard-library ConPTY helper and installed system fonts.
+The recorder runs real commands against a fresh temporary profile, saves the
+GIF to `docs/demo.gif`, and keeps the raw session in ignored
+`terminal-results/demo/`. It reads the title version from the application.
+Personal progress is never opened; Pillow and pexpect are development tools,
+not application dependencies. Re-record when the demonstrated flow changes.
 
 ## Pull requests
 

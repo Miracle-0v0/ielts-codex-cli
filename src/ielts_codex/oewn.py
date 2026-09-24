@@ -1,6 +1,6 @@
 """Open English WordNet release discovery and vocabulary synchronization.
 
-OEWN content is downloaded only when the user explicitly runs ``/update``.
+OEWN content is downloaded only when the user explicitly runs ``/update dictionary``.
 Synced definitions are stored in a local overlay under CC BY 4.0;
 the bundled, MIT-licensed vocabulary file is never rewritten.
 """

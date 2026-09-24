@@ -7,7 +7,7 @@ IELTS Codex 是面向中文学习者、离线优先的雅思词汇与表达训�
 
 核心学习只依赖 Python 标准库，无账号，无 API Key。保留斜杠命令和像素游戏；联网更新与自定义宠物均为可选功能。
 
-本文对应 **1.0.0**。Windows、Ubuntu 和 macOS 已完成真实终端实测，Python 3.10 已实际运行。版本范围、验证依据与发布流程见 [1.0 说明](docs/1.0_PLAN.md)。
+**[1.0.0 正式版](https://github.com/Miracle-0v0/ielts-codex-cli/releases/tag/v1.0.0) 已发布。**Windows、Ubuntu 和 macOS 已完成真实终端实测，Python 3.10 已实际运行。版本范围、验证依据与发布流程见 [1.0 说明](docs/1.0_PLAN.md)。
 
 它辅助词汇与表达训练，不覆盖完整雅思模考，不把词汇记录换算成官方分数，也不保证提分。
 
@@ -107,6 +107,8 @@ cd ielts-codex-cli
 
 ## 演示与贡献
 
-![IELTS Codex terminal demo](docs/demo.gif)
+![IELTS Codex 1.0 每日学习、拼写、语境和个人词库演示](docs/demo.gif)
 
-演示素材保留现有终端与游戏风格。参见 [文档导航](docs/README.md)、[完整功能参考](docs/REFERENCE.md)、[贡献指南](CONTRIBUTING.md) 和 [更新历史](CHANGELOG.md)。
+上方 GIF 重新录自 1.0 的真实终端交互，使用独立的临时演示数据：今日学习 → 退出后继续 → 拼写反馈与错词复习 → 语境训练 → 导入个人词库 → 分能力统计。录制方式见 [贡献指南](CONTRIBUTING.md#refresh-the-readme-demo)。
+
+参见 [文档导航](docs/README.md)、[完整功能参考](docs/REFERENCE.md)、[贡献指南](CONTRIBUTING.md) 和 [更新历史](CHANGELOG.md)。

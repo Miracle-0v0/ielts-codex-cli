@@ -2,7 +2,7 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## [1.0.0]
+## [1.0.0] - 2026-09-24
 
 ### Added
 
@@ -256,7 +256,7 @@ validation and tag checks described in [the release workflow](docs/1.0_PLAN.md).
 - Capped hint- and code-assisted game rounds so assisted recall is not recorded
   as unaided mastery.
 
-## [0.4.1] - 2026-07-30
+## 0.4.1 - 2026-07-30
 
 ### Changed
 
@@ -268,7 +268,7 @@ validation and tag checks described in [the release workflow](docs/1.0_PLAN.md).
 - Added automatic migration for local 0.4.0 companion saves and retained the
   text-only turn-based fallback for non-interactive terminals.
 
-## [0.4.0] - 2026-07-30
+## 0.4.0 - 2026-07-30
 
 Experimental gameplay release focused on making spelling practice more playful.
 
@@ -327,6 +327,7 @@ Initial public release.
 - Search across English words, Chinese meanings, and synonyms.
 - An MIT license and open-source contribution guide.
 
+[1.0.0]: https://github.com/Miracle-0v0/ielts-codex-cli/releases/tag/v1.0.0
 [0.6.8]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.7...v0.6.8
 [0.6.9]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.8...v0.6.9
 [0.6.10]: https://github.com/Miracle-0v0/ielts-codex-cli/compare/v0.6.9...v0.6.10
