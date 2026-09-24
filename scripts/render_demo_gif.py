@@ -17,6 +17,7 @@ import argparse
 import codecs
 import time
 import json
+import math
 import os
 import re
 import subprocess
@@ -47,6 +48,7 @@ FONT_SIZE = 18
 BRAILLE_FONT_SIZE = 13
 CELL_WIDTH = 9
 LINE_HEIGHT = 24
+TEXT_BASELINE = 20
 SIDE_MARGIN = 24
 TITLE_HEIGHT = 44
 CAPTION_HEIGHT = 50
@@ -406,6 +408,20 @@ def _find_fonts(
     )
 
 
+def _configure_grid(*fonts: ImageFont.FreeTypeFont) -> None:
+    """Keep equal-size fonts on one baseline without clipping their advances."""
+    global CELL_WIDTH, LINE_HEIGHT, TEXT_BASELINE
+    cjk_fonts, latin_fonts = fonts[:2], fonts[2:]
+    CELL_WIDTH = math.ceil(max(
+        *(font.getlength("汉") / 2 for font in cjk_fonts),
+        *(font.getlength(char) for font in latin_fonts for char in "0MW"),
+    ))
+    ascent = max(font.getmetrics()[0] for font in fonts)
+    descent = max(font.getmetrics()[1] for font in fonts)
+    TEXT_BASELINE = ascent + 2
+    LINE_HEIGHT = TEXT_BASELINE + descent + 2
+
+
 def _dim(color: tuple[int, int, int]) -> tuple[int, int, int]:
     return tuple(
         round(channel * 0.58 + BACKGROUND[index] * 0.42)
@@ -468,10 +484,11 @@ def _render_frame(
             else:
                 font = latin_bold_font if cell.style.bold else latin_regular_font
             draw.text(
-                (x, y),
+                (x, y + TEXT_BASELINE),
                 cell.char,
                 font=font,
                 fill=color,
+                anchor="ls",
             )
 
     cursor_base = (95, 215, 215)
@@ -870,6 +887,10 @@ def _record_session(
             events.append(("hold", 24, "Progress saved locally - start with /study 20"))
             (report_dir / "recording.json").write_text(json.dumps({
                 "version": APP_VERSION,
+                "font_sizes": {"cjk": cjk_regular_font.size, "latin": latin_regular_font.size},
+                "cell_width": CELL_WIDTH,
+                "line_height": LINE_HEIGHT,
+                "text_baseline": TEXT_BASELINE,
                 "transport": "Windows ConPTY" if os.name == "nt" else "POSIX PTY",
                 "commands": ["/study 20", "/study", "/quiz 1", "/mistakes",
                              "/mistakes practice spelling", "/context 1",
@@ -944,12 +965,13 @@ def main() -> int:
     cjk_bold_font = ImageFont.truetype(
         str(bold_path), FONT_SIZE, index=font_index
     )
-    latin_size = FONT_SIZE if latin_regular_path == regular_path else 15
+    latin_size = FONT_SIZE
     latin_regular_font = ImageFont.truetype(
         str(latin_regular_path), latin_size
     )
     latin_bold_font = ImageFont.truetype(str(latin_bold_path), latin_size)
     braille_font = ImageFont.truetype(str(braille_path), BRAILLE_FONT_SIZE)
+    _configure_grid(cjk_regular_font, cjk_bold_font, latin_regular_font, latin_bold_font)
     frames, durations = _record_session(
         cjk_regular_font,
         cjk_bold_font,
