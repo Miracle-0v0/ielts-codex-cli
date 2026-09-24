@@ -55,6 +55,7 @@ def child_main(data_dir):
     from ielts_codex.cli import main
     from ielts_codex.ui import TerminalUI
 
+    initial_mode = termios.tcgetattr(0)[3]
     terminal = TerminalUI(color=False)._command_terminal()
     evidence = {
         "os": platform.system(), "python": platform.python_version(),
@@ -65,7 +66,18 @@ def child_main(data_dir):
         "controlling_tty": os.tcgetpgrp(0) == os.getpgrp(),
     }
     print("__IELTS_TTY__" + json.dumps(evidence), flush=True)
-    return main(["--data-dir", data_dir, "--no-color", "--seed", "17"])
+    result = main(["--data-dir", data_dir, "--no-color", "--seed", "17"])
+    # Darwin invalidates the parent's slave handle after this controlling
+    # process exits. Measure restoration here while the terminal is still live.
+    restored_mode = termios.tcgetattr(0)[3]
+    mask = termios.ICANON | termios.ECHO | termios.ISIG
+    restoration = {
+        "stdin_tty": sys.stdin.isatty(), "mask": mask,
+        "before": initial_mode & mask, "after": restored_mode & mask,
+        "cli_exit": result,
+    }
+    print("__IELTS_TTY_RESTORED__" + json.dumps(restoration), flush=True)
+    return result
 
 
 class Terminal:
@@ -165,11 +177,16 @@ class Terminal:
     def quit(self):
         self.command("/quit")
         self.expect("已退出，学习进度已保存在本地。")
+        restored = self.expect(r"__IELTS_TTY_RESTORED__(\{[^\r\n]+\})", regex=True)
+        evidence = json.loads(restored.group(1))
+        check(evidence["stdin_tty"] and evidence["before"] == evidence["after"],
+              "child terminal input flags were not restored before exit")
+        check(evidence["cli_exit"] == 0, "CLI returned a nonzero status")
         deadline = min(self.deadline, time.monotonic() + 10)
         while self.process.poll() is None and time.monotonic() < deadline:
             self.read()
         check(self.process.poll() == 0, f"unclean child exit: {self.process.poll()}")
-        self.restored()
+        return evidence
 
     def close(self):
         if self.process.poll() is None:
@@ -288,7 +305,7 @@ def run(report_dir):
                 check(saved["study"]["completed"] == 1 and saved["study"]["items"],
                       "study did not preserve its next unanswered item")
                 check(len(saved["attempts"]) == 6, "study answer was lost or duplicated")
-                terminal.quit()
+                results["terminal_restoration"] = [terminal.quit()]
                 results["checks"].append("study onboarding, completed answer saved before q, clean exit")
 
             with Terminal(data_dir, report_dir, "resume") as terminal:
@@ -318,7 +335,7 @@ def run(report_dir):
                 terminal.send("\x03")
                 terminal.expect("已取消当前输入")
                 terminal.ready()
-                terminal.quit()
+                results["terminal_restoration"].append(terminal.quit())
                 results["checks"].append("process restart, exact study resume, resize, Right completion, terminal restoration")
             results["attempts_saved"] = len(read_progress(data_dir)["attempts"])
         results["passed"] = True
