@@ -358,7 +358,7 @@ class TerminalUI:
 
     def word_card(self, word: Word, progress: CardProgress | None = None) -> None:
         lines = [
-            f"{word.word}  {word.phonetic}  {word.part_of_speech}  ·  Band {word.band}",
+            f"{word.word}  {word.phonetic}  {word.part_of_speech}  ·  {word.level_label}",
             "",
             f"中文    {word.meaning_zh}",
             f"English  {word.definition_en}",
@@ -366,9 +366,17 @@ class TerminalUI:
             f"例句    {word.example}",
             f"        {word.example_zh}",
             f"近义词  {', '.join(word.synonyms)}",
-            f"主题    {word.topic}",
+            f"主题    {word.topic} · 词包 {word.deck}",
+            f"词条    {word.key}" + (" · 待补全，不参与训练" if word.status == "pending" else ""),
             f"来源    {word.definition_source} · {word.definition_license}",
         ]
+        for label, values in (("搭配", word.collocations), ("词形", word.forms), ("易错", word.common_errors)):
+            if values:
+                lines.append(f"{label}    {'；'.join(values)}")
+        if word.usage:
+            lines.append(f"用法    {word.usage}")
+        if word.notes:
+            lines.append(f"笔记    {word.notes}")
         if progress and progress.state != "new":
             lines.extend(
                 (

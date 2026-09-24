@@ -1,0 +1,372 @@
+{
+  "content_version": "1.0.0",
+  "provenance": {
+    "source": "IELTS Codex project-original editorial exercises",
+    "language": "English prompts with Chinese learning explanations",
+    "external_review_claimed": false,
+    "official_ielts_material": false,
+    "note": "Original fixed-choice practice. No external or human review is claimed; this pack is not an official IELTS test and does not estimate an IELTS band."
+  },
+  "exercises": [
+    {
+      "id": "context-0001",
+      "word_id": "core-0001",
+      "kind": "collocation",
+      "prompt": "The new safety course will be added ___ the curriculum next term.",
+      "choices": [
+        "at",
+        "for",
+        "to",
+        "by"
+      ],
+      "answer_index": 2,
+      "explanation": "add something to the curriculum 表示“把某项内容加入课程体系”。此处使用被动结构 be added to。",
+      "hint": "想一想“把某物加入一个整体”的介词搭配。"
+    },
+    {
+      "id": "context-0002",
+      "word_id": "core-0007",
+      "kind": "collocation",
+      "prompt": "She was awarded a scholarship ___ academic excellence.",
+      "choices": [
+        "for",
+        "of",
+        "into",
+        "at"
+      ],
+      "answer_index": 0,
+      "explanation": "a scholarship for academic excellence 指“因学业优异而获得的奖学金”；for 引出授予原因。",
+      "hint": "空格后说明获得奖学金的原因。"
+    },
+    {
+      "id": "context-0003",
+      "word_id": "core-0006",
+      "kind": "word_form",
+      "prompt": "Each student's progress is ___ at the end of the course.",
+      "choices": [
+        "assessment",
+        "assessing",
+        "assess",
+        "assessed"
+      ],
+      "answer_index": 3,
+      "explanation": "progress 是被评估的对象，is 后接过去分词 assessed，构成被动语态。assessment 是名词。",
+      "hint": "判断 progress 是动作的执行者还是承受者。"
+    },
+    {
+      "id": "context-0004",
+      "word_id": "core-0011",
+      "kind": "word_form",
+      "prompt": "The new plan aims to make food production more ___.",
+      "choices": [
+        "sustainably",
+        "sustainable",
+        "sustainability",
+        "sustain"
+      ],
+      "answer_index": 1,
+      "explanation": "make + 宾语 + 形容词表示“使……具有某种状态”，因此使用 sustainable。sustainably 是副词，sustainability 是名词。",
+      "hint": "这里需要说明 food production 变成什么状态。"
+    },
+    {
+      "id": "context-0005",
+      "word_id": "core-0012",
+      "kind": "word_form",
+      "prompt": "The factory has installed equipment to ___ less carbon dioxide.",
+      "choices": [
+        "emission",
+        "emitted",
+        "emit",
+        "emitting"
+      ],
+      "answer_index": 2,
+      "explanation": "这里的 to 引出目的，后接动词原形 emit。emission 是名词；emit carbon dioxide 表示“排放二氧化碳”。",
+      "hint": "equipment 后的 to 表示目的。"
+    },
+    {
+      "id": "context-0006",
+      "word_id": "core-0010",
+      "kind": "collocation",
+      "prompt": "Local volunteers play a key role ___ wildlife conservation.",
+      "choices": [
+        "in",
+        "at",
+        "to",
+        "for"
+      ],
+      "answer_index": 0,
+      "explanation": "play a role in something 表示“在某事中发挥作用”；wildlife conservation 指野生动物保护。",
+      "hint": "这里考查 play a role 后连接活动或领域的搭配。"
+    },
+    {
+      "id": "context-0007",
+      "word_id": "core-0017",
+      "kind": "word_form",
+      "prompt": "The award recognises the most ___ design submitted this year.",
+      "choices": [
+        "innovate",
+        "innovation",
+        "innovatively",
+        "innovative"
+      ],
+      "answer_index": 3,
+      "explanation": "design 是名词，需要形容词 innovative 修饰；the most innovative design 意为“最有创新性的设计”。",
+      "hint": "空格直接修饰 design，并与 the most 一起构成最高级。"
+    },
+    {
+      "id": "context-0008",
+      "word_id": "core-0023",
+      "kind": "collocation",
+      "prompt": "The council plans to invest ___ transport infrastructure.",
+      "choices": [
+        "at",
+        "in",
+        "for",
+        "with"
+      ],
+      "answer_index": 1,
+      "explanation": "invest in something 表示“投资于某事物”；transport infrastructure 指交通基础设施。",
+      "hint": "想一想 invest 表示“投资于”时的介词。"
+    },
+    {
+      "id": "context-0009",
+      "word_id": "core-0020",
+      "kind": "collocation",
+      "prompt": "The storage area is kept ___ constant video surveillance.",
+      "choices": [
+        "at",
+        "by",
+        "under",
+        "into"
+      ],
+      "answer_index": 2,
+      "explanation": "under surveillance 是固定搭配，表示“处于监控之下”；video surveillance 指视频监控。",
+      "hint": "需要表达“处于监控之下”的状态。"
+    },
+    {
+      "id": "context-0010",
+      "word_id": "core-0028",
+      "kind": "collocation",
+      "prompt": "The policy aims to protect applicants ___ prejudice in hiring.",
+      "choices": [
+        "from",
+        "into",
+        "for",
+        "at"
+      ],
+      "answer_index": 0,
+      "explanation": "protect someone from something 表示“保护某人免受……影响”；此处指使求职者免受招聘偏见的影响。",
+      "hint": "后面的 prejudice 是需要避免受到的伤害。"
+    },
+    {
+      "id": "context-0011",
+      "word_id": "core-0026",
+      "kind": "word_form",
+      "prompt": "The report describes recent ___ changes in the region.",
+      "choices": [
+        "demographically",
+        "demography",
+        "demographer",
+        "demographic"
+      ],
+      "answer_index": 3,
+      "explanation": "changes 是名词，应由形容词 demographic 修饰。demographic changes 指人口结构方面的变化。",
+      "hint": "空格修饰名词 changes。"
+    },
+    {
+      "id": "context-0012",
+      "word_id": "core-0032",
+      "kind": "collocation",
+      "prompt": "The proposed legislation will come ___ force in July.",
+      "choices": [
+        "to",
+        "into",
+        "on",
+        "for"
+      ],
+      "answer_index": 1,
+      "explanation": "come into force 表示法律、规定等“开始生效”。legislation 在这里指拟议的法律。",
+      "hint": "题意是法律将在七月“生效”。"
+    },
+    {
+      "id": "context-0013",
+      "word_id": "core-0035",
+      "kind": "word_form",
+      "prompt": "The course teaches students to assess meals ___, rather than only by price.",
+      "choices": [
+        "nutritional",
+        "nutrition",
+        "nutritionally",
+        "nutrient"
+      ],
+      "answer_index": 2,
+      "explanation": "副词 nutritionally 修饰 assess，说明从营养角度评估饭菜；nutritional 是形容词，nutrition 是名词。",
+      "hint": "空格说明“从什么角度评估”，修饰 assess。"
+    },
+    {
+      "id": "context-0014",
+      "word_id": "core-0038",
+      "kind": "word_form",
+      "prompt": "The report compares three different ___ for the same set of symptoms.",
+      "choices": [
+        "diagnoses",
+        "diagnosis",
+        "diagnose",
+        "diagnostic"
+      ],
+      "answer_index": 0,
+      "explanation": "three different 后需要复数名词。diagnosis 的复数是不规则形式 diagnoses；diagnose 是动词。",
+      "hint": "留意 three，以及 diagnosis 的复数形式。"
+    },
+    {
+      "id": "context-0015",
+      "word_id": "core-0039",
+      "kind": "collocation",
+      "prompt": "The study focuses on patients who suffer ___ chronic back pain.",
+      "choices": [
+        "at",
+        "into",
+        "on",
+        "from"
+      ],
+      "answer_index": 3,
+      "explanation": "suffer from a condition 表示“患有某种病症或受到其困扰”；chronic back pain 指长期背痛。",
+      "hint": "这里要连接 suffer 和具体病症。"
+    },
+    {
+      "id": "context-0016",
+      "word_id": "core-0042",
+      "kind": "word_form",
+      "prompt": "The scheme offers several small ___ to local farms.",
+      "choices": [
+        "subsidy",
+        "subsidies",
+        "subsidise",
+        "subsidised"
+      ],
+      "answer_index": 1,
+      "explanation": "several 后需要可数名词复数。subsidy 以辅音字母加 y 结尾，复数改 y 为 ies，成为 subsidies。",
+      "hint": "several 决定这里应使用单数还是复数。"
+    },
+    {
+      "id": "context-0017",
+      "word_id": "core-0044",
+      "kind": "collocation",
+      "prompt": "The report records household expenditure ___ transport.",
+      "choices": [
+        "at",
+        "from",
+        "on",
+        "into"
+      ],
+      "answer_index": 2,
+      "explanation": "expenditure on something 表示“在某方面的支出”；household expenditure on transport 指家庭交通支出。",
+      "hint": "空格后是支出的具体用途。"
+    },
+    {
+      "id": "context-0018",
+      "word_id": "core-0046",
+      "kind": "word_form",
+      "prompt": "Staff can work more ___ when they have the right tools.",
+      "choices": [
+        "productively",
+        "productive",
+        "productivity",
+        "production"
+      ],
+      "answer_index": 0,
+      "explanation": "work 是动词，应用副词 productively 修饰，表示“更有效率地工作”；productivity 是名词“生产效率”。",
+      "hint": "空格修饰动作 work。"
+    },
+    {
+      "id": "context-0019",
+      "word_id": "core-0049",
+      "kind": "word_form",
+      "prompt": "The researchers tested two competing ___.",
+      "choices": [
+        "hypothesis",
+        "hypothesise",
+        "hypothetical",
+        "hypotheses"
+      ],
+      "answer_index": 3,
+      "explanation": "two 后需要复数名词。hypothesis 的复数是 hypotheses；hypothesise 是动词，hypothetical 是形容词。",
+      "hint": "这里考查 hypothesis 的复数形式。"
+    },
+    {
+      "id": "context-0020",
+      "word_id": "core-0052",
+      "kind": "collocation",
+      "prompt": "The study found a correlation ___ commute length and job satisfaction.",
+      "choices": [
+        "among",
+        "between",
+        "within",
+        "across"
+      ],
+      "answer_index": 1,
+      "explanation": "a correlation between A and B 表示“A 与 B 之间的相关性”。相关性本身并不说明因果关系。",
+      "hint": "这里明确列出了 A and B 两个变量。"
+    },
+    {
+      "id": "context-0021",
+      "word_id": "core-0053",
+      "kind": "word_form",
+      "prompt": "A second laboratory will ___ the experiment using the same procedure.",
+      "choices": [
+        "replication",
+        "replicating",
+        "replicate",
+        "replicated"
+      ],
+      "answer_index": 2,
+      "explanation": "情态动词 will 后接动词原形 replicate。replicate an experiment 表示按相同程序重复实验。",
+      "hint": "will 后的动词应采用什么形式？"
+    },
+    {
+      "id": "context-0022",
+      "word_id": "core-0061",
+      "kind": "word_form",
+      "prompt": "The dancers wore ___ costumes during the festival.",
+      "choices": [
+        "traditional",
+        "traditionally",
+        "tradition",
+        "traditions"
+      ],
+      "answer_index": 0,
+      "explanation": "costumes 是名词，应由形容词 traditional 修饰；traditional costumes 表示“传统服饰”。",
+      "hint": "需要用形容词说明 costumes 的特点。"
+    },
+    {
+      "id": "context-0023",
+      "word_id": "core-0067",
+      "kind": "word_form",
+      "prompt": "The company gives staff more ___ in choosing their working hours.",
+      "choices": [
+        "flexible",
+        "flexibly",
+        "flexes",
+        "flexibility"
+      ],
+      "answer_index": 3,
+      "explanation": "give someone more flexibility 表示“给某人更大的灵活性”。这里需要名词 flexibility，后接 in doing something 说明具体方面。",
+      "hint": "give staff more 后需要表示“灵活性”的名词。"
+    },
+    {
+      "id": "context-0024",
+      "word_id": "core-0069",
+      "kind": "collocation",
+      "prompt": "The museum developed the exhibition in collaboration ___ local artists.",
+      "choices": [
+        "for",
+        "with",
+        "at",
+        "from"
+      ],
+      "answer_index": 1,
+      "explanation": "in collaboration with someone 表示“与某人合作”。with 后接合作伙伴。",
+      "hint": "local artists 是合作伙伴。"
+    }
+  ]
+}

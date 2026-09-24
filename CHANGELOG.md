@@ -2,7 +2,50 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.0rc1] - Unreleased candidate
+
+### Added
+
+- Personal CSV/JSON vocabulary packs with fixed sense IDs, import previews,
+  duplicate/error reporting, pending entries, explicit completion and reversible
+  batches. Undo keeps learning history; importing the same identity reconnects it.
+- A resumable daily study entry with a 5–60 minute preference, bounded workloads,
+  less new vocabulary when reviews accumulate, and a gentler return after a break.
+- 24 original fixed-choice collocation and word-form exercises, plus task-specific
+  mistake review. Passing these exercises does not establish free-production ability.
+- Independent recall, spelling and context schedules and dated attempt records.
+- Schema 3 storage, with exact schema 1/2 backups before the first migrated save,
+  conflict detection, automatic/manual backups and recovery commands.
+
+### Fixed
+
+- Again now returns within the current learn/review/quiz group, up to three
+  attempts per word. Daily plans also persist retries and remaining order.
+- Same-day practice and early reviews do not inflate long-term intervals; Hard
+  does not add successful repetitions, and hints cap scheduling ratings at Hard.
+- Spelling ignores only case and surrounding whitespace. Explicit accepted
+  variants are supported without removing digits, punctuation or internal spaces.
+- Operational game failures no longer count as language failures. Game due dates
+  do not create an untrainable backlog in the core daily plan.
+
+### Changed
+
+- Retained and assigned fixed IDs to the existing 72 core entries; replaced
+  per-word Band labels with project editorial levels. Added fields for
+  collocations, forms, common errors, usage and provenance.
+- Replaced combined accuracy/mastery claims with separate task evidence and
+  conservative stable-review criteria. Legacy totals do not manufacture missing
+  hint, correctness or delayed-review evidence.
+- Separated program updates from external dictionary reference updates. Dictionary
+  changes are previewed, confirmed and reversible; teaching definitions stay intact.
+- Organized examples, behavior tests and documentation by purpose, and added
+  complete package-content checks to the three-platform workflow.
+- Local RC builds can upgrade to the same-version final release; online downloads
+  remain restricted to stable release targets.
+
+The candidate is locally integrated and has not been published. Windows automated
+and non-TTY checks have passed; real terminal interaction, Python 3.10 execution
+and macOS/Linux runtime validation remain release tasks.
 
 ## [0.6.10] - 2026-09-04
 

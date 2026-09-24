@@ -3,33 +3,20 @@
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-IELTS Codex 是一个在终端里使用的雅思词汇训练器，借鉴了 Codex 的交互风格：斜杠命令、词卡、拼写测验、间隔重复，把背单词做成一件有点酷的事。
+IELTS Codex 是面向中文学习者、离线优先的雅思词汇与表达训练 CLI。在终端里认识单词、检查拼写、练习语境，并在隔天复习中验证记忆。认义、拼写和语境分别安排复习，分别显示表现。
 
-它只依赖 Python 标准库，零运行时依赖；平时启动完全离线，不需要账号、API Key 或联网。当前学习界面以中文为主。
+核心学习只依赖 Python 标准库，无账号，无 API Key。保留斜杠命令和像素游戏；联网更新与自定义宠物均为可选功能。
+
+**当前为本地候选版 `1.0.0rc1`，尚未正式发布。** 本地自动与安装检查已完成；三平台真实终端交互和 Python 3.10 运行验证仍待完成。详见 [1.0 更新计划](docs/1.0_PLAN.md)。
+
+它辅助词汇与表达训练，不覆盖完整雅思模考，不把词汇记录换算成官方分数，也不保证提分。
 
 > [!NOTE]
-> 这是一个独立开源学习工具，不是 OpenAI 官方产品，与 OpenAI 无隶属或背书关系。
+> 这是独立开源学习工具，不是 OpenAI 官方产品，与 OpenAI 无隶属或背书关系。
 
-## Demo
+## 安装与启动
 
-![IELTS Codex terminal demo](docs/demo.gif)
-
-## 亮点功能
-
-- 斜杠命令面板：输入 `/` 呼出命令列表，方向键选择，Tab 补全
-- 三合一学习闭环：学新词、到期复习、中译英拼写测验
-- 间隔重复：用 Again / Hard / Good / Easy 四级评分，自动安排复习
-- 艾宾浩斯遗忘曲线：学习完直接在终端里看到记忆衰减趋势
-- 像素风口袋冒险小游戏：在迷雾地图里按顺序“捕获”单词小怪兽
-- 本地合成 8-bit BGM：游戏配乐纯本地生成，没有第三方素材
-- 图片生成像素宠物：可选接入自己的视觉 API，把照片变成陪练伙伴
-- 本地进度存储：原子写入 JSON，学习记录不怕中途退出
-- 纯离线启动：无账号、无 API Key、无依赖，打开就能用
-- 手动更新：`/update` 可刷新 WordNet 英文释义，并安全升级到新版
-
-## 快速上手
-
-需要 Python 3.10+。如果系统里没有，启动器会提示通过 Astral uv 安装一个隔离的 Python 3.12，不影响系统 Python。
+需要 Python 3.10+。没有可用 Python 时，启动器会征得同意后通过 Astral uv 下载隔离的 Python 3.12；之后核心学习可离线运行。
 
 **Windows：**
 
@@ -37,7 +24,6 @@ IELTS Codex 是一个在终端里使用的雅思词汇训练器，借鉴了 Code
 git clone https://github.com/Miracle-0v0/ielts-codex-cli.git
 cd ielts-codex-cli
 install.bat
-ielts
 ```
 
 **Ubuntu / macOS：**
@@ -46,35 +32,81 @@ ielts
 git clone https://github.com/Miracle-0v0/ielts-codex-cli.git
 cd ielts-codex-cli
 ./install.sh
-ielts
 ```
 
-不想安装命令的话，也可以直接运行 `run.bat`（Windows）或 `./run.sh`（Linux / macOS）便携启动。
+以上安装方式随所取得的源码版本运行；当前候选改动尚未发布到远端。安装后新开终端，运行 `ielts --version` 确认，再运行 `ielts`。也可以用 `run.bat` 或 `./run.sh` 便携启动。源码安装器指向项目目录，请保留该目录。更多方式、故障处理与卸载见 [安装说明](docs/INSTALLATION.md)。
 
-进入界面后输入 `/` 打开命令面板，常用的有：
+## 第一次和每天怎么学
 
-| 命令 | 作用 |
+```text
+/study 20
+```
+
+首次设置每日时间、主要薄弱项和内容包，之后即可直接开始学习。时间可选 5～60 分钟，是任务预算，不是倒计时。系统先处理到期任务，再安排新词与未验证能力；积压时减少新词，连续至少三天没有学习记录时提供较短的恢复计划。
+
+中途输入 `q` 返回，下次 `/study` 继续保存的计划。`/study new 20` 明确重新安排未答任务，已完成记录保留。每次回答与计划位置一起保存。Again 会在本组稍后重练，每词每组最多三次，并有整组次数上限。
+
+也可以独立训练：
+
+| 命令 | 用途 |
 | --- | --- |
-| `/learn` | 学习新词 |
-| `/review` | 复习到期卡片 |
-| `/quiz` | 中译英拼写测验 |
-| `/game` | 像素冒险小游戏 |
-| `/search <单词>` | 按英文、中文或同义词搜索 |
-| `/stats` | 查看学习统计 |
+| `/review 10` | 认义到期复习 |
+| `/learn 5` | 学习新词 |
+| `/quiz 5` | 中译英拼写 |
+| `/context 5` | 固定选项的词形和搭配练习 |
+| `/mistakes` | 查看待练错项及相关能力的最近表现 |
+| `/mistakes practice spelling` | 重点练习拼写薄弱项 |
+| `/today`、`/stats` | 今日进度、分题型表现和稳定复习 |
+| `/game` | 像素冒险，游戏表现独立记录 |
 
-## 词库来源
+输入 `/` 打开命令列表。拼写只忽略大小写和首尾空白，合法变体由词条的 `accepted_answers` 明确列出。
 
-内置词库目前有 72 个词条，覆盖 9 个雅思常见话题，由项目作者基于雅思词汇知识人工编写整理，包含音标、英文释义、中文释义、双语例句、同义词、话题和 band 值，随项目以 MIT 协议发布。它不是剑桥官方词表。
+## 加入自己遇到的词
 
-此外，`/update` 可以手动从 Open English WordNet（OEWN）同步最新的英文释义；中文释义、例句等人工整理内容不会被覆盖。OEWN 内容遵循 CC BY 4.0 及 Princeton WordNet 许可，具体署名、修改说明和链接见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+```text
+/add commute
+/import "reading.csv" reading
+/decks
+/decks reading
+/decks all
+```
 
-## 证书 / 声明
+`/add` 先收进待补全词条，不自动生成释义或标准答案。CSV/JSON 导入会先展示新增、补全、重复和错误，再确认写入。不完整条目不参与训练；通过原 ID 导入词性和中文义项即可补全。
 
-- 项目代码与内置词库：MIT License
-- 第三方词源（OEWN）：见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
-- 本工具是独立开源项目，非 OpenAI 产品，与 OpenAI 无隶属或背书关系
-- 遗忘曲线等展示为概念性估计，不构成对个人记忆效果的测量或承诺
+词条使用稳定 ID，同一拼写可以有不同义项。`/import undo` 撤销最近一次导入，也可指定批次；已有学习记录保留。`/decks` 选择后续学习内容包，已有每日计划保持原安排，需重排时用 `/study new`。
 
-欢迎提交 Issue 和 PR，贡献指南见 [CONTRIBUTING.md](CONTRIBUTING.md)，更新历史见 [CHANGELOG.md](CHANGELOG.md)。
+使用 [CSV 示例](examples/vocabulary.csv) 或 [JSON 示例](examples/vocabulary.json) 起步，完整格式见 [个人词库](docs/VOCABULARY.md)。
 
-更详细的技术说明（英文）见 [docs/TECHNICAL_ROADMAP.md](docs/TECHNICAL_ROADMAP.md)。
+## 怎样理解进步
+
+“已接触”“这次答对”“延迟复习通过”表示不同事情。认义来自自评，拼写和语境按明确答案判定；提示后完成、本组重练和游戏记录分别保存。
+
+“稳定复习”按能力统计：连续至少三次跨日、无提示的 Good/Easy，最近一次距上次记录练习至少七天；第一次详细记录只建立起点。错误、Hard 或提示会中断该能力的连续通过，本组重练不增加通过次数。同日重复和刚看完答案后的重练不会快速拉长间隔。
+
+认词通过不会把拼写或语境自动标成通过。语境记录仅表示这些固定选项题的表现，不代表自由造句或掌握一个词的全部用法。这些都是项目学习规则，不是雅思评分或记忆能力测量。详见 [学习记录与恢复](docs/LEARNING_DATA.md)。
+
+## 进度、备份和更新
+
+数据默认保存在 `~/.ielts-codex`，可用 `--data-dir` 或 `IELTS_CODEX_HOME` 改位置。两个实例发生写入冲突时会拒绝覆盖。旧进度升级到格式 3 前，会在首次成功保存前留下完整原始备份，无需删除重来。
+
+- `/backup`、`/backups`、`/restore <备份名>`：创建、查看和恢复进度备份。
+- `/update` 或 `/update status`：离线查看程序、内置内容和外部词典版本。
+- `/update program`：检查并升级到正式稳定版；不会安装预发布版本或降级。
+- `/update dictionary`：预览 OEWN 外部参考变化，确认后保存。
+- `/update dictionary rollback`：确认后恢复最近一次更新前的参考。
+
+外部参考单独显示，不覆盖教学释义、个人词条或训练答案。联网失败不影响本地学习。完整备份请复制整个数据目录；卸载程序不会自动删除学习记录。
+
+## 内容与后续范围
+
+内置 72 个词条、9 个话题，以及 24 道原创语境题（13 道词形、11 道搭配）。词条分层“核心／进阶／拓展”是项目编辑标签，不对应官方 Band。题目已做自动检查与代理阅读检查，不声称完成人工或外部审校。
+
+先把内容扩展和持续学习做好，再逐步增加经过检查的词条；300～500 词不是本候选版已经达到的数量。自由造句、完整作文反馈、语音评分和多设备同步留待后续。
+
+代码与项目内置内容采用 MIT 许可；词库不是剑桥官方词表。OEWN 参考保留原有许可，署名与来源见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。遗忘曲线是概念性展示，不代表个人记忆效果测量。
+
+## 演示与贡献
+
+![IELTS Codex terminal demo](docs/demo.gif)
+
+演示素材保留现有终端与游戏风格。参见 [文档导航](docs/README.md)、[完整功能参考](docs/REFERENCE.md)、[贡献指南](CONTRIBUTING.md) 和 [更新历史](CHANGELOG.md)。

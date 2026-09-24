@@ -1,0 +1,66 @@
+{
+  "deck": "my-reading",
+  "words": [
+    {
+      "id": "personal-example-adapt-v",
+      "word": "adapt",
+      "part_of_speech": "v.",
+      "meaning_zh": "适应；使适应",
+      "definition_en": "to change your behaviour or a method so that it suits new conditions",
+      "example": "Small businesses must adapt to changes in demand.",
+      "example_zh": "小企业必须适应需求的变化。",
+      "topic": "work",
+      "level": "core",
+      "collocations": [
+        "adapt to change",
+        "adapt a method"
+      ],
+      "forms": [
+        "adapts",
+        "adapted",
+        "adapting"
+      ],
+      "common_errors": [
+        "表示“适应”时使用 adapt to，不使用 adapt with。"
+      ],
+      "usage": "谈论应对环境、需求或制度变化。",
+      "source": "Original example for personal import; check before adapting."
+    },
+    {
+      "id": "personal-example-record-n",
+      "word": "record",
+      "part_of_speech": "n.",
+      "meaning_zh": "记录；档案",
+      "definition_en": "information kept so that it can be used later",
+      "example": "The clinic keeps a record of each visit.",
+      "example_zh": "诊所保存每次就诊的记录。",
+      "topic": "health",
+      "collocations": [
+        "keep a record",
+        "medical records"
+      ],
+      "source": "Original example for personal import."
+    },
+    {
+      "id": "personal-example-record-v",
+      "word": "record",
+      "part_of_speech": "v.",
+      "meaning_zh": "记录；录制",
+      "definition_en": "to store information or sound so that it can be used later",
+      "example": "The researchers record the temperature every hour.",
+      "example_zh": "研究人员每小时记录一次温度。",
+      "topic": "research",
+      "collocations": [
+        "record the results",
+        "record an interview"
+      ],
+      "source": "Original example for personal import."
+    },
+    {
+      "id": "personal-example-reconcile",
+      "word": "reconcile",
+      "status": "pending",
+      "notes": "从自己的阅读材料收集；补充词性和中文释义后再导入。"
+    }
+  ]
+}

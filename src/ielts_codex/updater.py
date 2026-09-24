@@ -146,6 +146,15 @@ def parse_version(value: str) -> tuple[int, int, int]:
     )
 
 
+def parse_current_version(value: str) -> tuple[tuple[int, int, int], bool]:
+    """Accept a local release candidate without allowing prerelease downloads."""
+
+    match = re.fullmatch(r"(?P<base>.+)rc(?:0|[1-9]\d*)", value.strip())
+    if match is not None:
+        return parse_version(match.group("base")), True
+    return parse_version(value), False
+
+
 def _project_toml_value(text: str, key: str) -> str | None:
     """Read one simple scalar from the TOML ``[project]`` table."""
 
@@ -555,7 +564,7 @@ class ProjectUpdater:
         )
 
     def update(self, *, dry_run: bool = False) -> ProjectUpdateResult:
-        current_tuple = parse_version(self.current_version)
+        current_tuple, is_candidate = parse_current_version(self.current_version)
         release = self.discover_latest()
         target = self.detect_install()
         common = {
@@ -571,7 +580,7 @@ class ProjectUpdater:
                 message="The local version is newer than the latest stable release.",
                 **common,
             )
-        if release.version_tuple == current_tuple:
+        if release.version_tuple == current_tuple and not is_candidate:
             return ProjectUpdateResult(
                 "up_to_date",
                 message="IELTS Codex is already on the latest stable release.",

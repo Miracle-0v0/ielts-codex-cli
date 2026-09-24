@@ -574,16 +574,26 @@ class GameMode:
                 if status is GameStatus.COMPLETED:
                     result.completed += 1
                     rating = self._rating_for(metrics)
-                    self.store.record_review(word.word, rating)
+                    self.store.record_review(
+                        word.key, rating, task="game",
+                        hint_level=max(metrics.hint_level, 4 if metrics.used_direct_letter else 0),
+                        navigation_hint=bool(metrics.navigation_stages),
+                        error_type="wrong_letter" if metrics.wrong_hits else None,
+                    )
                     self._round_debrief(
                         word, rating, metrics, snapshot, completed=True
                     )
                 elif status is GameStatus.DEAD:
                     result.fainted += 1
-                    self.store.record_review(word.word, Rating.AGAIN)
+                    self.store.record_review(
+                        word.key, None, task="game", correct=None,
+                        hint_level=max(metrics.hint_level, 4 if metrics.used_direct_letter else 0),
+                        navigation_hint=bool(metrics.navigation_stages),
+                        error_type="operation_failure",
+                    )
                     self._round_debrief(
                         word,
-                        Rating.AGAIN,
+                        None,
                         metrics,
                         snapshot,
                         completed=False,
@@ -717,9 +727,9 @@ class GameMode:
 
         def add(items: Iterable[Word]) -> None:
             for item in items:
-                if item.word not in seen and len(selected) < count:
+                if item.key not in seen and len(selected) < count:
                     selected.append(item)
-                    seen.add(item.word)
+                    seen.add(item.key)
 
         from datetime import date
 
@@ -730,8 +740,8 @@ class GameMode:
         add(self.bank.unseen(self.store.cards, count, topic, self.rng))
         remaining = [
             word
-            for word in self.bank.words
-            if word.word not in seen and (topic is None or word.topic == topic)
+            for word in self.bank.ready_words
+            if word.key not in seen and (topic is None or word.topic == topic)
         ]
         self.rng.shuffle(remaining)
         add(remaining)
@@ -1261,7 +1271,7 @@ class GameMode:
     def _round_debrief(
         self,
         word: Word,
-        rating: Rating,
+        rating: Rating | None,
         metrics: RoundMetrics,
         snapshot: GameSnapshot,
         *,
@@ -1289,7 +1299,7 @@ class GameMode:
                 f"中文      {word.meaning_zh}",
                 f"English   {word.definition_en}",
                 f"例句      {word.example}",
-                f"评分      {rating.label} · {reason}",
+                f"评分      {rating.label + ' · ' + reason if rating is not None else '操作中断，未判语言失败，未改变复习安排'}",
                 f"战况      {snapshot.elapsed_seconds:.0f}s · 撞错 {metrics.wrong_hits} "
                 f"· 生命 {snapshot.health:.0f} · 饱腹 {snapshot.hunger:.0f}",
             ],
@@ -1309,7 +1319,7 @@ class GameMode:
                 f"完成      {result.completed}",
                 f"昏倒      {result.fainted}",
                 f"伙伴      {pet.glyph} {pet.name}",
-                "进度      每个已结算单词都已立即写入间隔复习记录",
+                "进度      已记录完成和操作中断；操作中断不改变复习安排",
             ],
         )
 

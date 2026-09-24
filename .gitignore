@@ -10,4 +10,7 @@ build/
 /.ielts-codex/
 /.ielts-bootstrap/
 /oewn_overlay.json
-/tests/
+
+/terminal-results/
+
+/artifacts/

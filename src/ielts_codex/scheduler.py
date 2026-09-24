@@ -79,37 +79,37 @@ def schedule(
     rating: Rating,
     today: date | None = None,
 ) -> CardProgress:
-    """Return an updated card after one recall rating.
-
-    The intervals follow a conservative SM-2-inspired progression. An ``Again``
-    card remains due today when it is new, allowing the current session to show
-    it once more; a lapsed review returns the following day.
-    """
-
+    """Schedule one rating, keeping immediate practice separate from retention."""
     current_day = today or date.today()
+    rating = Rating(rating)
     was_new = card.state == "new"
-    repetitions = card.repetitions
-    interval = card.interval
-    ease = card.ease
-    lapses = card.lapses
+    same_day = bool(card.last_reviewed and card.last_reviewed >= current_day.isoformat())
+    early = bool(card.due and card.due > current_day.isoformat())
+    repetitions, interval, ease, lapses = (
+        card.repetitions, card.interval, card.ease, card.lapses
+    )
 
     if rating is Rating.AGAIN:
         repetitions = 0
-        ease = max(MIN_EASE, ease - 0.20)
-        if was_new:
-            interval = 0
-            due_day = current_day
-            state = "learning"
-        else:
-            interval = 1
-            due_day = current_day + timedelta(days=1)
-            state = "relearning"
-            lapses += 1
+        if card.state not in {"learning", "relearning"}:
+            ease = max(MIN_EASE, ease - 0.20)
+            lapses += int(not was_new)
+        interval = 0
+        due_day = current_day
+        state = "learning" if was_new or card.state == "learning" else "relearning"
+    elif card.state in {"learning", "relearning"}:
+        interval = 1
+        due_day = current_day + timedelta(days=1)
+        repetitions = int(rating in {Rating.GOOD, Rating.EASY})
+        state = "review"
+    elif not was_new and (same_day or early):
+        # Still count the practice, without moving an already scheduled date.
+        due_day = date.fromisoformat(card.due) if card.due else current_day
+        state = card.state
     elif rating is Rating.HARD:
-        repetitions += 1
         ease = max(MIN_EASE, ease - 0.15)
-        interval = 1 if interval == 0 else max(1, round(interval * 1.2))
-        due_day = current_day + timedelta(days=interval)
+        interval = 1
+        due_day = current_day + timedelta(days=1)
         state = "review"
     elif rating is Rating.GOOD:
         repetitions += 1
