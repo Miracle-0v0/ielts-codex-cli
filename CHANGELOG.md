@@ -2,7 +2,7 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## [1.0.0rc1] - Unreleased candidate
+## [1.0.0]
 
 ### Added
 
@@ -27,6 +27,8 @@ This project follows [Semantic Versioning](https://semver.org/).
   variants are supported without removing digits, punctuation or internal spaces.
 - Operational game failures no longer count as language failures. Game due dates
   do not create an untrainable backlog in the core daily plan.
+- macOS terminal smoke checks now verify restored terminal state before process
+  teardown, avoiding a read from a disconnected PTY.
 
 ### Changed
 
@@ -43,9 +45,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Local RC builds can upgrade to the same-version final release; online downloads
   remain restricted to stable release targets.
 
-The candidate is locally integrated and has not been published. Windows automated
-and non-TTY checks have passed; real terminal interaction, Python 3.10 execution
-and macOS/Linux runtime validation remain release tasks.
+Native terminal checks have passed on Windows, Ubuntu and macOS, including
+actual Python 3.10 execution. Formal publication uses the three-platform
+validation and tag checks described in [the release workflow](docs/1.0_PLAN.md).
 
 ## [0.6.10] - 2026-09-04
 

@@ -1,9 +1,8 @@
 # IELTS Codex — Reference
 
-This document describes local candidate `1.0.0rc1`. It is not yet a published
-stable 1.0 release. Local Windows/Python 3.13.9 automatic and installed-package
-checks have passed; real terminal interaction, all three platforms and actual
-Python 3.10 execution remain release work. See [1.0_PLAN.md](1.0_PLAN.md).
+This document describes version `1.0.0`. Native terminal checks have passed on
+Windows/Python 3.13.9, Ubuntu/Python 3.12.13 and macOS/Python 3.10.20. The scope,
+validation evidence and publication process are in [1.0_PLAN.md](1.0_PLAN.md).
 
 The trainer uses only the Python standard library. Core study works offline,
 without an account or API key. Optional updates and custom-pet generation
@@ -24,7 +23,7 @@ interpreter, and `IELTS_CODEX_NO_AUTO_INSTALL=1` prohibits the download.
 
 A package installation uses `python -m pip install .` and provides both
 `ielts` and `ielts-codex`. Source and installed versions depend on the
-revision obtained; this candidate has not been published remotely. See
+revision obtained; check `ielts --version` after installation. See
 [INSTALLATION.md](INSTALLATION.md) for troubleshooting and uninstalling while
 keeping study records.
 

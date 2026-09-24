@@ -68,7 +68,7 @@ installations continue to work. Store new documentation under `docs/` and tests
 under `tests/`; do not put learning progress or temporary verification output in
 the repository.
 
-The 1.0 candidate scope is described in [docs/1.0_PLAN.md](docs/1.0_PLAN.md).
+The 1.0 scope and release process are described in [docs/1.0_PLAN.md](docs/1.0_PLAN.md).
 The current command reference is [docs/REFERENCE.md](docs/REFERENCE.md).
 
 ## Pull requests
@@ -96,12 +96,15 @@ artifacts, or credentials.
 
 ## Versioning
 
-The local candidate is `1.0.0rc1`, pending real terminal, three-platform and
-Python 3.10 runtime checks before stable 1.0. It has not been published. The
-updater recognizes a running candidate and can move to the same-number final
-version, but downloads only stable releases; install candidate packages
-explicitly. Update `pyproject.toml` and `src/ielts_codex/__init__.py`
-together. Bundled-content and external-reference versions are separate.
+The 1.0.0 release workflow runs behavior, package and native terminal checks
+on Windows, Ubuntu and macOS with Python 3.10. Publication requires every
+platform job to pass for the release tag, matching package versions and a tag
+commit in official main history. See [the release process](docs/1.0_PLAN.md).
+
+Update `pyproject.toml` and `src/ielts_codex/__init__.py` together.
+Bundled-content and external-reference versions are separate. The updater
+downloads stable releases only; a local prerelease can upgrade to its
+same-number final version.
 
 The project follows Semantic Versioning. Iterative visual, interaction,
 animation, compatibility, and other small improvements to an existing feature
